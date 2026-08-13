@@ -1,0 +1,31 @@
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  SuggestExtensions: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*.rb"
+    - "*.gemspec"
+
+Layout/LineLength:
+  Max: 120
+
+Naming/PredicatePrefix:
+  Enabled: false
+
+# The gem entry point is intentionally dash-named (matches the gem name for auto-require).
+Naming/FileName:
+  Exclude:
+    - "lib/langsys-rails.rb"
+
+# `::Rails` is required, not redundant: inside the `Langsys::Rails` namespace a bare `Rails`
+# would resolve to this module, not the framework.
+Style/RedundantConstantBase:
+  Enabled: false

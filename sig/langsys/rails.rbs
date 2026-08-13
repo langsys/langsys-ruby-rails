@@ -1,0 +1,57 @@
+# Type signatures for the public API of the langsys-rails gem.
+
+module Langsys
+  module Rails
+    VERSION: String
+
+    def self.configure: () ?{ (Config) -> void } -> Config
+    def self.config: () -> Config
+    def self.resolver: () -> LocaleResolver
+    def self.client: () -> untyped
+    def self.client=: (untyped) -> untyped
+    def self.reset_client!: () -> void
+    def self.t: (String, ?String?, **untyped) -> String
+    def self.locale: () -> String
+    def self.handle_pending: () -> untyped
+
+    class Config
+      attr_accessor api_key: String?
+      attr_accessor project_id: String?
+      attr_accessor api_url: String?
+      attr_accessor base_locale: String?
+      attr_accessor supported: Array[String]
+      attr_accessor query_param: String
+      attr_accessor cookie_name: String
+      attr_accessor cookie_max_age: Integer
+      attr_accessor auto_flush: bool
+      attr_accessor cache: untyped
+      attr_accessor cache_ttl: Integer?
+      attr_accessor timeout: Float?
+      def initialize: () -> void
+    end
+
+    # Backed by ActiveSupport::CurrentAttributes (reset per request by Rails).
+    class CurrentLocale
+      def self.locale: () -> String?
+      def self.locale=: (String?) -> String?
+    end
+
+    class CurrentAttributesLocaleSource
+      def get: () -> String
+      def subscribe: (?untyped) ?{ (String) -> void } -> Proc
+    end
+
+    class LocaleResolver
+      def initialize: (Config) -> void
+      def resolve: (query: String?, cookie: String?, accept_language: String?, client: untyped) -> [ String, bool ]
+    end
+
+    module Helper
+      def ls: (String, ?String?, **untyped) -> String
+    end
+
+    module Controller
+      include Helper
+    end
+  end
+end
