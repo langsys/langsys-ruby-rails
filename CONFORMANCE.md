@@ -7,7 +7,7 @@
 | **specVersion** | 8.0.1 (79 rules) |
 | **Profiles** | server, binding, all — derived: binding over langsys-ruby |
 | **SDK revision** | `feature/838_write_key_gating`, cut from `main` `2751820` |
-| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite last run against `20962ea` with the Ruby lane's uncommitted 8.0.1 work in its tree (the ICU no-params fix among it), to be re-run against that commit when it lands |
+| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes last run against `a96633e`, a clean checkout of that commit |
 | **Suite** | 73 hermetic examples, 1 pending by design (`rake spec`) · 9 live (`rake integration`) · 20 hermetic and 6 live mutants (`rake mutation`, `rake mutation:live`) |
 
 **On the Profiles row.** The spec's Profiles table never names Rails, or any server framework
