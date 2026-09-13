@@ -8,6 +8,7 @@ require_relative "rails/current_locale"
 require_relative "rails/locale_resolver"
 require_relative "rails/helper"
 require_relative "rails/controller"
+require_relative "rails/request_boundary"
 
 module Langsys
   # Rails integration for Langsys — a thin wrapper over the +langsys+ base gem.
@@ -62,38 +63,26 @@ module Langsys
         client.locale
       end
 
-      # Register phrases discovered while rendering (write key + auto_flush), or drop the
-      # queue (read key) so a long-running server doesn't accumulate it. Never raises.
-      def handle_pending
-        return unless client.has_pending?
-
-        if config.auto_flush && client.can_write?
-          client.flush_pending
-        else
-          client.clear_pending
-        end
-      rescue Langsys::Error => e
-        logger&.warn("langsys: flushing pending registrations failed: #{e.message}")
-        nil
-      end
-
       private
 
-      def logger
+      # The client if one has been built, without building one. The request boundary reads it:
+      # a request that never translated has nothing to reset or flush, and building a client
+      # there would raise on every route of an app that has no credentials yet.
+      def built_client
+        @client
+      end
+
+      def rails_logger
         defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
       end
 
+      # The logger falls back to Rails.logger so the base SDK's diagnostics reach the
+      # application log — among them its one-time warning that this session cannot write
+      # (OBS-1), otherwise the only sign that a read-only deployment registers nothing.
       def build_client
-        Langsys::Client.new(
-          api_key: config.api_key,
-          project_id: config.project_id,
-          api_url: config.api_url,
-          base_locale: config.base_locale,
-          locale_source: CurrentAttributesLocaleSource.new,
-          cache: config.cache,
-          cache_ttl: config.cache_ttl,
-          timeout: config.timeout
-        )
+        options = config.core_options
+        options[:logger] ||= rails_logger
+        Langsys::Client.new(locale_source: CurrentAttributesLocaleSource.new, **options)
       end
     end
   end

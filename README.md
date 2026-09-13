@@ -79,9 +79,18 @@ A simple locale switcher is just a set of links:
 <% end %>
 ```
 
-With a **write** key, phrases discovered while rendering are registered after the response;
-with a **read** key nothing is written (the queue is dropped so it can't grow unbounded).
-Toggle with `config.langsys.auto_flush = false`.
+Phrases discovered while rendering are registered **after the response has been sent**, never
+while the visitor waits. The Railtie inserts `Langsys::Rails::RequestBoundary` in front of
+`ActionDispatch::Executor` to do that; it flushes through the base SDK, which alone decides
+whether this session may write. On a read-only key nothing is sent, and the base SDK logs that
+once per process. The same middleware drops the base SDK's write decision at every request
+boundary, so a decision made for one request is never reused for the next.
+
+> **Caching.** The locale is negotiated from the query string, a cookie and `Accept-Language`,
+> and the response does not carry `Vary`. Rails' default `Cache-Control: private` keeps shared
+> caches from storing these pages. If you mark a localized response public (`expires_in …,
+> public: true`), add `Vary: Accept-Language, Cookie` yourself, or a CDN will serve one
+> visitor's language to the next.
 
 ## Server-side HTML translation
 
@@ -106,17 +115,33 @@ Set any of these on `config.langsys`:
 | `query_param` | `"locale"` | the switch query param |
 | `cookie_name` | `"langsys_locale"` | |
 | `cookie_max_age` | `31_536_000` | one year, in seconds |
-| `auto_flush` | `true` | register discovered phrases after the response (write key) |
+| `auto_flush` | `false` | the base SDK's best-effort flush at process exit; the per-request flush is always on |
+| `logger` | `Rails.logger` | receives the base SDK's diagnostics |
 | `cache` / `cache_ttl` / `timeout` | base SDK defaults | e.g. `Langsys::Cache::Memory.new` |
 
 ## Development
 
 ```bash
 bundle install
-bundle exec rake spec
+bundle exec rake spec          # hermetic
 bundle exec rubocop
-bundle exec rake rbs   # validate the RBS type signatures
+bundle exec rake rbs           # validate the RBS type signatures
+bundle exec rake mutation      # CONF-3: every hermetic mutant must turn its tests red
 ```
+
+The live suite and its mutations run against a local Langsys backend, with the fixed local-only
+credentials langsys2's `SdkIntegrationSeeder` creates for this repo:
+
+```bash
+export LANGSYS_API_URL=http://langsys2.test/api
+export LANGSYS_PROJECT_ID=c0de0000-5d10-4000-8000-000000000013
+export LANGSYS_API_KEY=sdk_integration_rails_local_only_do_not_deploy
+export LANGSYS_READ_KEY=sdk_integration_rails_read_local_only_do_not_deploy
+bundle exec rake integration
+bundle exec rake mutation:live
+```
+
+`CONFORMANCE.md` maps every rule of the Langsys SDK Behaviour Spec to the test that proves it.
 
 Type signatures for the public API ship in `sig/` (RBS).
 

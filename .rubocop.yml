@@ -20,6 +20,11 @@ Layout/LineLength:
 Naming/PredicatePrefix:
   Enabled: false
 
+# The mutation manifest is a data table — one entry per mutant — not code that grows by logic.
+Metrics/ModuleLength:
+  Exclude:
+    - "spec/mutation/manifest.rb"
+
 # The gem entry point is intentionally dash-named (matches the gem name for auto-require).
 Naming/FileName:
   Exclude:

@@ -7,10 +7,11 @@ require_relative "helper"
 module Langsys
   module Rails
     # Controller concern (auto-included into +ActionController::Base+ by the Railtie).
-    # Resolves the request locale before each action, persists an explicit +?locale=+ choice
-    # to a cookie, and — with a write key — registers phrases discovered while rendering.
+    # Resolves the request locale before each action and persists an explicit +?locale=+
+    # choice to a cookie.
     #
-    # +CurrentLocale+ is reset automatically at request end, so there's nothing to tear down.
+    # Phrases discovered while rendering are not registered here: RequestBoundary does that
+    # once the response has been sent. +CurrentLocale+ is reset automatically at request end.
     module Controller
       extend ActiveSupport::Concern
 
@@ -19,7 +20,6 @@ module Langsys
       included do
         before_action :set_langsys_locale
         after_action :persist_langsys_locale
-        after_action :flush_langsys_pending
         helper_method :ls if respond_to?(:helper_method)
       end
 
@@ -50,10 +50,6 @@ module Langsys
           expires: cfg.cookie_max_age.seconds.from_now,
           same_site: :lax
         }
-      end
-
-      def flush_langsys_pending
-        Langsys::Rails.handle_pending
       end
     end
   end

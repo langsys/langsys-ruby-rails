@@ -12,22 +12,28 @@ module Langsys
     def self.reset_client!: () -> void
     def self.t: (String, ?String?, **untyped) -> String
     def self.locale: () -> String
-    def self.handle_pending: () -> untyped
 
     class Config
+      # Settings the base SDK's client defines, passed to it unchanged.
+      CORE_SETTINGS: Array[Symbol]
+      # Request-to-locale settings for the host framework.
+      LOCALE_SETTINGS: Array[Symbol]
+
       attr_accessor api_key: String?
       attr_accessor project_id: String?
       attr_accessor api_url: String?
       attr_accessor base_locale: String?
+      attr_accessor cache: untyped
+      attr_accessor cache_ttl: Integer?
+      attr_accessor timeout: Float?
+      attr_accessor auto_flush: bool
+      attr_accessor logger: untyped
       attr_accessor supported: Array[String]
       attr_accessor query_param: String
       attr_accessor cookie_name: String
       attr_accessor cookie_max_age: Integer
-      attr_accessor auto_flush: bool
-      attr_accessor cache: untyped
-      attr_accessor cache_ttl: Integer?
-      attr_accessor timeout: Float?
       def initialize: () -> void
+      def core_options: () -> Hash[Symbol, untyped]
     end
 
     # Backed by ActiveSupport::CurrentAttributes (reset per request by Rails).
@@ -44,6 +50,13 @@ module Langsys
     class LocaleResolver
       def initialize: (Config) -> void
       def resolve: (query: String?, cookie: String?, accept_language: String?, client: untyped) -> [ String, bool ]
+    end
+
+    # Rack middleware marking the request boundary: drops the base SDK's write decision as a
+    # request enters, and flushes discovered phrases once the response has been sent.
+    class RequestBoundary
+      def initialize: (untyped app) -> void
+      def call: (Hash[String, untyped] env) -> [ Integer, untyped, untyped ]
     end
 
     module Helper
