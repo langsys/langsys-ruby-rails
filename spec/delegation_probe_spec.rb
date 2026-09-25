@@ -42,7 +42,7 @@ module DelegationProbe
     { rules: %w[CACHE-2], name: "failed-fetch memory", pattern: /failing\?|record_failure/ },
     { rules: %w[MIG-3 MIG-4 MIG-5 MIG-6 MIG-7 MIG-9], name: "legacy conversion and import",
       pattern: /convert_literal|Migration\.convert|Migration\.new|rails_plural|gettext_plural|PoFile/ },
-    { rules: %w[SNAP-1 SNAP-3], name: "snapshots", pattern: /Snapshot/ }
+    { rules: %w[SNAP-1 SNAP-2 SNAP-3], name: "snapshots", pattern: /Snapshot/ }
   ].freeze
 
   module_function

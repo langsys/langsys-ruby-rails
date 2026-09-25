@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **SDK** | `langsys-ruby-rails` — the Rails binding over the `langsys` Ruby gem |
-| **Spec revision read** | langsys2 cd5468c7…, docs/sdk-spec.mdx blob abe122cf5346f92a0474b627d49451e6de9cd761 |
-| **specVersion** | 8.2.13 (113 rules) |
-| **Profiles** | server, binding — the spec's per-SDK table row for `langsys-ruby-rails`, over core `langsys-ruby` |
+| **Spec revision read** | langsys2 9b23f3d8…, docs/sdk-spec.mdx blob 33bbc4095ef2d13a55926b71045a7094f6b9706a |
+| **specVersion** | 8.2.14 (113 rules) |
+| **Profiles** | server, binding — derived: binding over langsys-ruby |
 | **SDK revision** | `feature/838_write_key_gating` |
 | **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes run against `0344155`, a clean checkout of that commit |
 | **Contract double** | `spec/contract-fixture/`, vendored byte-exact from langsys-js-typescript, git tree `542f57f5ffcb9038db1b7411152b7e31b96cb269` (the suite recomputes the tree id) |
@@ -132,7 +132,7 @@ Every item came from executing code.
 | MIG-8 | implemented | n/a (pure) | The bridge is the Rails entry point of the one contract, reading the core's file configuration: › "gives a key through I18n.t the same phrase and category as the base SDK's translate_legacy". Mutant `bridge-overrides-category`. |
 | MIG-9 | delegated | - | Core row: langsys-ruby MIG-9. Absence probe `spec/delegation_probe_spec.rb` › "legacy conversion and import"; firing control on the core. |
 | SNAP-1 | delegated | - | Core row: langsys-ruby SNAP-1. Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
-| SNAP-2 | n/a (architecture: a Rails response is rendered on the server per request, and this binding seeds no client before a first render; live if it adds a preload hook) | - | The core's catalog cache is what a server render reads. |
+| SNAP-2 | delegated | - | Core row: langsys-ruby SNAP-2 — the synchronous snapshot loader, held until the shared snapshot vectors land (format pinned at 8.2.14). This binding will pass an app setting naming the snapshot file to the core client, so it is seeded at startup; until the core exposes the loader the binding loads nothing itself: Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
 | SNAP-3 | delegated | - | Core row: langsys-ruby SNAP-3. Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
 | BIND-1 | implemented | n/a (pure) | `spec/binding_conformance_spec.rb` › "renders and queues exactly what calling the core directly does" (eight vectors, output and resulting queue compared with `Langsys::Client#translate`) and › "makes the ls helper the same call as Langsys::Rails.t". Timing adaptations are the request boundary (GATE-3, REG-3, SRV-3); shape adaptations are the controller's request-to-locale plumbing (SRV-6), the error normalizer (MSG-9) and the I18n bridge (MIG-2). Mutant `t-adapts-meaning`. |
 | BIND-2 | implemented | n/a (pure) | Absence probe `spec/delegation_probe_spec.rb` › "capability decision" finds no capability value in lib/; firing control: core. `spec/request_boundary_spec.rb` › "does not discard a read-only session's queue; the core decides what happens to it". Mutant `boundary-branches-on-capability`. |
@@ -163,9 +163,9 @@ Computed from the table above; `spec/conformance_doc_spec.rb` fails the build wh
 | Status | Count |
 |---|---|
 | implemented | 34 |
-| delegated | 53 |
+| delegated | 54 |
 | n/a (profile: browser) | 21 |
-| n/a (architecture) | 5 |
+| n/a (architecture) | 4 |
 | total | 113 |
 
 ## Obligations taken over from `langsys-ruby`
@@ -209,9 +209,9 @@ The commands, not the values, are the record:
 
 ```
 # The spec blob and rule ids this file rows against
-git -C ../langsys2 rev-parse cd5468c765c67764a0e08c434d41413ead3678dc:docs/sdk-spec.mdx
-#   -> abe122cf5346f92a0474b627d49451e6de9cd761
-git -C ../langsys2 cat-file blob abe122cf | grep -cE '^### [A-Z]+-[0-9]+ '
+git -C ../langsys2 rev-parse 9b23f3d8:docs/sdk-spec.mdx
+#   -> 33bbc4095ef2d13a55926b71045a7094f6b9706a
+git -C ../langsys2 cat-file blob 33bbc409 | grep -cE '^### [A-Z]+-[0-9]+ '
 #   -> 113
 
 # Hermetic suite (includes the contract double), lint, signatures, hermetic mutants
