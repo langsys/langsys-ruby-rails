@@ -5,10 +5,12 @@ require "langsys"
 require_relative "rails/version"
 require_relative "rails/config"
 require_relative "rails/current_locale"
-require_relative "rails/locale_resolver"
 require_relative "rails/helper"
 require_relative "rails/controller"
 require_relative "rails/request_boundary"
+require_relative "rails/messages"
+require_relative "rails/validator_source"
+require_relative "rails/i18n_bridge"
 
 module Langsys
   # Rails integration for Langsys — a thin wrapper over the +langsys+ base gem.
@@ -17,7 +19,6 @@ module Langsys
   #
   #   Rails.application.config.langsys.api_key    = ENV["LANGSYS_API_KEY"]
   #   Rails.application.config.langsys.project_id = ENV["LANGSYS_PROJECT_ID"]
-  #   Rails.application.config.langsys.supported  = %w[en-US es-ES]
   #
   # Then translate in views with +ls+, in controllers with +Langsys::Rails.t+, or reach the
   # full SDK via +Langsys::Rails.client+.
@@ -25,17 +26,12 @@ module Langsys
     class << self
       def configure
         yield config if block_given?
-        @resolver = nil
         reset_client!
         config
       end
 
       def config
         @config ||= Config.new
-      end
-
-      def resolver
-        @resolver ||= LocaleResolver.new(config)
       end
 
       # The process-wide client (built once). Its locale comes from the request-scoped

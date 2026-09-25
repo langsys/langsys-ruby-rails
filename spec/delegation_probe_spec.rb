@@ -24,8 +24,8 @@ module DelegationProbe
       pattern: /clear_pending|registered\?|begin_send|end_send|penalise|snapshot|backing_off\?|reset_backoff!/ },
     { rules: %w[GATE-4 CACHE-1], name: "cache writes and keys",
       pattern: /@cache\.(?:set|write|delete|clear)|\bcache_key\b/ },
-    { rules: %w[CAT-1 CAT-2 CAT-3 REG-12], name: "catalog inspection",
-      pattern: /Catalog\.resolve|existing_keys|\.key\?\(|is_a\?\(Hash\)/ },
+    { rules: %w[CAT-1 CAT-2 CAT-3 REG-12 REG-13], name: "catalog inspection",
+      pattern: /Catalog\.resolve|existing_keys|get_translations|catalog\[/ },
     { rules: %w[REG-2 BIND-3], name: "send scheduling",
       pattern: /flush_if_due|flush_due\?|\bdebounce\b|\bsleep\b|Thread\.new|\bTimer\b/ },
     { rules: %w[REG-9 BIND-3], name: "batching", pattern: /batch_limit|each_slice/ },
@@ -33,11 +33,16 @@ module DelegationProbe
     { rules: %w[REG-11], name: "ellipsis handling", pattern: /Ellipsis|ellipsis_stem|truncated_twin\?/ },
     { rules: %w[HINT-2 WIRE-1 WIRE-2 WIRE-3 BIND-3], name: "request construction",
       pattern: %r{Net::HTTP|Http\.new|X-Authorization|normalize_locale|Content-Type|discovery/hint} },
-    { rules: %w[ICU-1 ICU-2 ICU-3 ICU-4 ICU-5], name: "interpolation",
-      pattern: /\bInterpolate\b|TwitterCldr|\bCldr\b/ },
+    { rules: %w[ICU-1 ICU-2 ICU-3 ICU-4 ICU-5 ICU-6], name: "interpolation",
+      pattern: /\bInterpolate\b|TwitterCldr|\bCldr\b|IcuFallback/ },
     { rules: %w[CID-1 CID-2 CID-3 CID-4], name: "content-block identity", pattern: /Digest::MD5|custom_id|\bmd5\b/ },
-    { rules: %w[TOK-1 TOK-2 TOK-3 TOK-4 TOK-5 MARK-1 MARK-2 SRV-5], name: "tokenizer and host identity",
-      pattern: /Nokogiri|data-ls-|data-langsys-|TRANSLATABLE_ATTRIBUTES|tokeni[sz]e/ }
+    { rules: %w[TOK-1 TOK-2 TOK-3 TOK-4 TOK-5 TOK-6 MARK-1 MARK-2 MARK-3 MARK-4 SRV-5],
+      name: "tokenizer and host identity",
+      pattern: /Nokogiri|data-ls-(?:phrase|contentblock|category)|data-langsys-|TRANSLATABLE_ATTRIBUTES|tokeni[sz]e/ },
+    { rules: %w[CACHE-2], name: "failed-fetch memory", pattern: /failing\?|record_failure/ },
+    { rules: %w[MIG-3 MIG-4 MIG-5 MIG-6 MIG-7 MIG-9], name: "legacy conversion and import",
+      pattern: /convert_literal|Migration\.convert|Migration\.new|rails_plural|gettext_plural|PoFile/ },
+    { rules: %w[SNAP-1 SNAP-3], name: "snapshots", pattern: /Snapshot/ }
   ].freeze
 
   module_function

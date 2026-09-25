@@ -1,0 +1,9 @@
+en:
+  checkout:
+    submit: "Place order"
+    greeting: "Hello %{name}, your order is ready"
+  cart:
+    items:
+      zero: "Your cart is empty"
+      one: "%{count} item"
+      other: "%{count} items"

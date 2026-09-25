@@ -20,7 +20,7 @@ RSpec.describe "Rails integration" do
     get "/greet?locale=es-ES"
     expect(last_response).to be_ok
     expect(last_response.body).to eq("Guardar")
-    expect(last_response.headers["Set-Cookie"]).to include("langsys_locale=es-ES")
+    expect(last_response.headers["Set-Cookie"]).to include("langsys_locale=es-es")
   end
 
   it "resolves the locale from Accept-Language without persisting a cookie" do
@@ -32,5 +32,49 @@ RSpec.describe "Rails integration" do
   it "falls back to the base locale with no signal" do
     get "/greet"
     expect(last_response.body).to eq("Save")
+  end
+
+  describe "SRV-6 — one URL, four requests" do
+    def vary = last_response.headers["Vary"]
+    def cookie_written = last_response.headers["Set-Cookie"]
+
+    it "lets the URL win over a conflicting cookie and header, and adds no Vary" do
+      set_cookie "langsys_locale=de-de"
+      get "/greet?locale=es-ES", {}, { "HTTP_ACCEPT_LANGUAGE" => "de-DE" }
+      expect(last_response.body).to eq("Guardar")
+      expect(vary.to_s).not_to match(/cookie|accept-language/i)
+    end
+
+    it "lets the cookie win over the header, with Vary: Cookie" do
+      set_cookie "langsys_locale=es-es"
+      get "/greet", {}, { "HTTP_ACCEPT_LANGUAGE" => "de-DE" }
+      expect(last_response.body).to eq("Guardar")
+      expect(vary).to match(/\bCookie\b/)
+      expect(cookie_written).to be_nil
+    end
+
+    it "negotiates the header alone, with Vary: Accept-Language" do
+      get "/greet", {}, { "HTTP_ACCEPT_LANGUAGE" => "es-ES,en;q=0.5" }
+      expect(last_response.body).to eq("Guardar")
+      expect(vary).to match(/\bAccept-Language\b/)
+    end
+
+    it "falls through an unsupported cookie to the header, and does not re-set the cookie" do
+      set_cookie "langsys_locale=zz-zz"
+      get "/greet", {}, { "HTTP_ACCEPT_LANGUAGE" => "es-ES" }
+      expect(last_response.body).to eq("Guardar")
+      expect(cookie_written).to be_nil
+    end
+
+    it "never serves or persists an unsupported URL locale" do
+      get "/greet?locale=%3Cscript%3E"
+      expect(last_response.body).to eq("Save")
+      expect(cookie_written).to be_nil
+    end
+
+    it "keeps a Vary the application set, adding only what is missing" do
+      get "/vary?locale=", {}, { "HTTP_ACCEPT_LANGUAGE" => "es-ES" }
+      expect(vary.split(/,\s*/)).to eq(%w[Origin Accept-Language])
+    end
   end
 end

@@ -15,7 +15,7 @@ module Langsys
       # Apps configure via `config.langsys.api_key = …` etc. in an initializer / environment.
       config.langsys = ActiveSupport::OrderedOptions.new
 
-      SETTINGS = (Config::CORE_SETTINGS + Config::LOCALE_SETTINGS).freeze
+      SETTINGS = (Config::CORE_SETTINGS + Config::WIRING_SETTINGS).freeze
 
       # In front of the executor, so the post-response flush runs after Rails has completed the
       # request on both of the paths RequestBoundary supports.
@@ -30,6 +30,13 @@ module Langsys
           end
         end
       end
+
+      # Legacy-key migration (MIG-1): the I18n bridge exists only when the mode is configured.
+      config.after_initialize do
+        Langsys::Rails::I18nBridge.install! if Langsys::Rails.config.migration
+      end
+
+      rake_tasks { load File.expand_path("../../tasks/langsys.rake", __dir__) }
 
       initializer "langsys.integrate" do
         ActiveSupport.on_load(:action_controller) { include Langsys::Rails::Controller }

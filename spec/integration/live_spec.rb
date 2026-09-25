@@ -23,6 +23,29 @@ require "support/test_app"
 # server holds, never what this binding sent.
 LIVE_REQUIRED_ENV = %w[LANGSYS_API_URL LANGSYS_PROJECT_ID LANGSYS_API_KEY LANGSYS_READ_KEY].freeze
 
+# The local backend throttles its API at 120 requests a minute per address, and every lane on
+# this machine shares 127.0.0.1. A throttled lookup degrades to source text, which reads as a
+# failed translation, so the suite paces itself to half that budget.
+module LivePacing
+  BUDGET = 60
+  @sent = []
+
+  class << self
+    def record = @sent << Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+    def wait_for_budget
+      loop do
+        now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        @sent.reject! { |at| at < now - 60 }
+        break if @sent.size < BUDGET
+
+        sleep(@sent.first + 60 - now)
+      end
+    end
+  end
+end
+WebMock.after_request(real_requests_only: true) { |_request, _response| LivePacing.record }
+
 RSpec.describe "Rails binding, live", :integration do
   include Rack::Test::Methods
   include RackHelpers
@@ -34,6 +57,7 @@ RSpec.describe "Rails binding, live", :integration do
   before do
     missing = LIVE_REQUIRED_ENV.select { |name| ENV.fetch(name, "").empty? }
     skip "set #{missing.join(', ')} to run the live specs" unless missing.empty?
+    LivePacing.wait_for_budget
   end
 
   let(:write_key) { ENV.fetch("LANGSYS_API_KEY") }
@@ -45,7 +69,6 @@ RSpec.describe "Rails binding, live", :integration do
       config.project_id = ENV.fetch("LANGSYS_PROJECT_ID")
       config.api_url = ENV.fetch("LANGSYS_API_URL")
       config.base_locale = "en-US"
-      config.supported = %w[en-US es-ES]
       config.cache = Langsys::Cache::Memory.new
       overrides.each { |name, value| config.public_send("#{name}=", value) }
     end
@@ -59,7 +82,7 @@ RSpec.describe "Rails binding, live", :integration do
     reader = Langsys::Client.new(api_key: write_key, project_id: ENV.fetch("LANGSYS_PROJECT_ID"),
                                  api_url: ENV.fetch("LANGSYS_API_URL"), cache: Langsys::Cache::Memory.new)
     catalog = reader.get_translations(locale: "en-US", use_cache: false)
-    raise "live catalog unavailable — is the stack up?" unless catalog.is_a?(Hash)
+    raise "live catalog unavailable — is the stack up, or throttling (429)?" unless catalog.is_a?(Hash)
 
     catalog.fetch(category, {}).key?(phrase)
   end
@@ -154,6 +177,116 @@ RSpec.describe "Rails binding, live", :integration do
       configure_live(key: write_key) # positive control: the identical render, on a write key
       get "/plan"
       expect(server_holds?(miss)).to be(true)
+    end
+  end
+
+  describe "SRV-6 — one URL, four requests, against the project's own locales" do
+    before do
+      configure_live(key: write_key)
+      RenderPlan.phrases = [["Technical Support", "CAT_3"]]
+    end
+
+    def vary = last_response.headers["Vary"].to_s
+
+    it "lets the URL win over a conflicting cookie and header, and adds no Vary" do
+      set_cookie "langsys_locale=en-us"
+      get "/plan?locale=es-ES", {}, { "HTTP_ACCEPT_LANGUAGE" => "en-US" }
+      expect(last_response.body).to eq("Soporte Técnico")
+      expect(vary).not_to match(/cookie|accept-language/i)
+    end
+
+    it "lets the cookie win over the header, with Vary: Cookie" do
+      set_cookie "langsys_locale=es-es"
+      get "/plan", {}, { "HTTP_ACCEPT_LANGUAGE" => "en-US" }
+      expect(last_response.body).to eq("Soporte Técnico")
+      expect(vary).to match(/\bCookie\b/)
+    end
+
+    it "negotiates the header alone, with Vary: Accept-Language" do
+      get "/plan", {}, { "HTTP_ACCEPT_LANGUAGE" => "es-ES,en;q=0.5" }
+      expect(last_response.body).to eq("Soporte Técnico")
+      expect(vary).to match(/\bAccept-Language\b/)
+    end
+
+    it "falls through a locale the project does not serve, and never writes it back" do
+      set_cookie "langsys_locale=fr-fr"
+      get "/plan", {}, { "HTTP_ACCEPT_LANGUAGE" => "es-ES" }
+      expect(last_response.body).to eq("Soporte Técnico")
+      expect(last_response.headers["Set-Cookie"]).to be_nil
+    end
+  end
+
+  describe "GATE-10 — the layout helper, against the project's base locale" do
+    before { configure_live(key: write_key) }
+
+    it "marks a page rendered in a target locale, and leaves a base-locale page unmarked" do
+      get "/layout?locale=es-ES"
+      expect(last_response.body).to start_with('<html data-ls-resolved="es-es">')
+      get "/layout?locale=en-US"
+      expect(last_response.body).to start_with("<html>")
+    end
+  end
+
+  describe "MSG-6 / MSG-8 — a failed form's templates" do
+    def with_label(label)
+      I18n.backend.store_translations(:en, activemodel: { attributes: { signup: { email: label } } })
+      yield
+    ensure
+      I18n.reload!
+    end
+
+    it "registers a template the catalog lacks under Errors, once the response is sent" do
+      configure_live(key: write_key)
+      label = "email #{SecureRandom.hex(4)}"
+      template = "The #{label} is required."
+      with_label(label) do
+        env = Rack::MockRequest.env_for("/signups", method: "POST", params: { email: "" })
+        status, _, body = LangsysTestApp.call(env)
+        expect(status).to eq(422)
+        expect(read_body(body).lines.first.chomp).to eq(template)
+        expect(server_holds?(template, "Errors")).to be(false)
+        body.close
+      end
+      expect(server_holds?(template, "Errors")).to be(true)
+      expect(server_holds?(template, "CAT_3")).to be(false)
+    end
+
+    it "registers nothing from a read-only key, while the same failure on a write key does" do
+      label = "email #{SecureRandom.hex(4)}"
+      template = "The #{label} is required."
+      with_label(label) do
+        configure_live(key: read_key)
+        post "/signups", email: ""
+        expect(server_holds?(template, "Errors")).to be(false)
+        configure_live(key: write_key)
+        post "/signups", email: ""
+      end
+      expect(server_holds?(template, "Errors")).to be(true)
+    end
+  end
+
+  describe "MSG-7 — the build-time listing registers, idempotently" do
+    it "registers every listed template on the first run, and nothing on the second" do
+      configure_live(key: write_key)
+      label = "email #{SecureRandom.hex(4)}"
+      I18n.backend.store_translations(:en, activemodel: { attributes: {
+                                        signup: { email: label, age: "age", tags: "tags", starts_on: "start date",
+                                                  password: "password" }
+                                      } })
+      run = lambda do
+        out = StringIO.new
+        status = Langsys::Messages::Command.run(sources: [Langsys::Rails::ValidatorSource.new([Signup])],
+                                                client: Langsys::Rails.client, register: true, out: out)
+        [status, out.string[/registered (\d+) new/, 1].to_i]
+      end
+      first_status, first = run.call
+      expect(first_status).to eq(0)
+      expect(first).to be_positive
+      expect(server_holds?("The #{label} is required.", "Errors")).to be(true)
+      configure_live(key: write_key) # a fresh client, with nothing cached from the first run
+      expect(run.call).to eq([0, 0])
+    ensure
+      I18n.reload!
     end
   end
 

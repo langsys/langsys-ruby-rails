@@ -38,7 +38,6 @@ RSpec.configure do |config|
     Langsys::Rails::CurrentLocale.reset
     Langsys::Rails.reset_client!
     Langsys::Rails.instance_variable_set(:@config, nil)
-    Langsys::Rails.instance_variable_set(:@resolver, nil)
   end
 end
 
@@ -64,12 +63,12 @@ def catalog_body(data, write_enabled: nil)
   body
 end
 
-def authorize_body(key_type:, write_enabled:)
+def authorize_body(key_type:, write_enabled:, target_locales: %w[es-es de-de])
   {
     "status" => true,
     "data" => {
       "id" => "proj-1", "title" => "Test", "base_locale" => "en-us",
-      "target_locales" => [], "default_locales" => {}, "key_type" => key_type,
+      "target_locales" => target_locales, "default_locales" => {}, "key_type" => key_type,
       "write_enabled" => write_enabled,
       "langsys_settings" => { "translatable_items" => { "batch_limit" => 200 } }
     }
@@ -88,9 +87,9 @@ def stub_translations(locale, data, write_enabled: nil)
     .to_return(json_response(catalog_body(data, write_enabled: write_enabled)))
 end
 
-def stub_authorize(key_type:, write_enabled:)
+def stub_authorize(key_type: "write", write_enabled: true, **rest)
   stub_request(:get, AUTHORIZE_URL)
-    .to_return(json_response(authorize_body(key_type: key_type, write_enabled: write_enabled)))
+    .to_return(json_response(authorize_body(key_type: key_type, write_enabled: write_enabled, **rest)))
 end
 
 def stub_registration

@@ -4,10 +4,11 @@ require "rails"
 require "action_controller/railtie"
 require "langsys/rails/railtie" # register the Railtie now that ::Rails::Railtie exists
 require "rack/test"
+require_relative "models"
 
 APP_SETTINGS = {
   api_key: "test-key", project_id: "proj-1", api_url: API_URL,
-  base_locale: "en-US", supported: %w[en-US es-ES de-DE]
+  base_locale: "en-US"
 }.freeze
 
 # What PlanController renders, and what it saw of the core's write decision. Set per example.
@@ -99,6 +100,29 @@ class GreetingsController < ActionController::Base
   end
 end
 
+class VaryController < ActionController::Base
+  def show
+    response.headers["Vary"] = "Origin"
+    render plain: ls("Save", "UI")
+  end
+end
+
+class LayoutController < ActionController::Base
+  def show
+    render inline: "<%= tag.html(**langsys_resolved_attributes) { ls('Save', 'UI') } %>"
+  end
+end
+
+# A failed form: the entries its validation produced, rendered in the request locale.
+class SignupsController < ActionController::Base
+  def create
+    signup = Signup.new(email: params[:email], age: 30, tags: [], starts_on: Date.new(2026, 6, 1))
+    signup.valid?
+    render plain: Langsys::Rails::Messages.entries(signup).map { |entry| ls_message(entry) }.join("\n"),
+           status: :unprocessable_content
+  end
+end
+
 class PlanController < ActionController::Base
   def show
     RenderPlan.signal_at_entry = Langsys::Rails.client.write_signal
@@ -149,10 +173,18 @@ LangsysTestApp.routes.draw do
   get "/plan" => "plan#show"
   get "/concurrent" => "concurrent#show"
   get "/events" => "events#show"
+  get "/vary" => "vary#show"
+  get "/layout" => "layout#show"
+  post "/signups" => "signups#create"
   get "/health", to: ->(_env) { [200, { "content-type" => "text/plain" }, ["ok"]] }
 end
 
 RSpec.configure do |config|
+  # Every request asks the core which locales the project serves (SRV-6). A default answer
+  # — a write key, base en-us, targets es-es and de-de — which an example overrides by
+  # stubbing authorize again (WebMock prefers the latest stub).
+  config.before { stub_authorize }
+
   config.after do
     RenderPlan.reset!
     EventLog.reset!

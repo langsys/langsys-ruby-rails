@@ -180,8 +180,14 @@ RSpec.describe Langsys::Rails::RequestBoundary do
     it "drops a decision recorded outside any request before the request can read it" do
       client.t("Save", category: "UI")
       expect(client.write_signal).to be(true) # positive control
-      get "/plan"
-      expect(RenderPlan.signal_at_entry).to be_nil
+      seen = :unset
+      boundary = described_class.new(lambda do |_env|
+        seen = client.write_signal
+        [200, {}, ["ok"]]
+      end)
+      _, _, body = boundary.call(Rack::MockRequest.env_for("/"))
+      body.close
+      expect(seen).to be_nil
     end
   end
 

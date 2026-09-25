@@ -14,16 +14,26 @@ Metrics/BlockLength:
     - "spec/**/*.rb"
     - "*.gemspec"
 
-Layout/LineLength:
-  Max: 120
-
 Naming/PredicatePrefix:
   Enabled: false
 
-# The mutation manifest is a data table — one entry per mutant — not code that grows by logic.
-Metrics/ModuleLength:
+# Data tables, not code that grows by logic: the mutation manifest (one entry per mutant), and
+# the server-message wording and validator listing, each a rule-by-rule mapping.
+Metrics:
   Exclude:
     - "spec/mutation/manifest.rb"
+    - "lib/langsys/rails/messages.rb"
+    - "lib/langsys/rails/validator_source.rb"
+
+Layout/LineLength:
+  Max: 120
+  Exclude:
+    - "spec/mutation/manifest.rb"
+
+# The I18n bridge spec passes Rails' own %{name} placeholders, which is what it tests.
+Style/FormatStringToken:
+  Exclude:
+    - "spec/i18n_bridge_spec.rb"
 
 # The gem entry point is intentionally dash-named (matches the gem name for auto-require).
 Naming/FileName:

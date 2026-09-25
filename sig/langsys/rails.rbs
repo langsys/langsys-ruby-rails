@@ -6,7 +6,6 @@ module Langsys
 
     def self.configure: () ?{ (Config) -> void } -> Config
     def self.config: () -> Config
-    def self.resolver: () -> LocaleResolver
     def self.client: () -> untyped
     def self.client=: (untyped) -> untyped
     def self.reset_client!: () -> void
@@ -16,8 +15,8 @@ module Langsys
     class Config
       # Settings the base SDK's client defines, passed to it unchanged.
       CORE_SETTINGS: Array[Symbol]
-      # Request-to-locale settings for the host framework.
-      LOCALE_SETTINGS: Array[Symbol]
+      # Where Rails keeps the values SRV-6's locale resolution reads.
+      WIRING_SETTINGS: Array[Symbol]
 
       attr_accessor api_key: String?
       attr_accessor project_id: String?
@@ -28,7 +27,9 @@ module Langsys
       attr_accessor timeout: Float?
       attr_accessor auto_flush: bool
       attr_accessor logger: untyped
-      attr_accessor supported: Array[String]
+      attr_accessor messages_category: String?
+      attr_accessor migration: Array[String]?
+      attr_accessor migration_locale: String?
       attr_accessor query_param: String
       attr_accessor cookie_name: String
       attr_accessor cookie_max_age: Integer
@@ -47,11 +48,6 @@ module Langsys
       def subscribe: (?untyped) ?{ (String) -> void } -> Proc
     end
 
-    class LocaleResolver
-      def initialize: (Config) -> void
-      def resolve: (query: String?, cookie: String?, accept_language: String?, client: untyped) -> [ String, bool ]
-    end
-
     # Rack middleware marking the request boundary: drops the base SDK's write decision as a
     # request enters, and flushes discovered phrases once the response has been sent.
     class RequestBoundary
@@ -61,6 +57,30 @@ module Langsys
 
     module Helper
       def ls: (String, ?String?, **untyped) -> String
+      def ls_message: (Hash[String, untyped]) -> String
+      def langsys_resolved_attributes: () -> Hash[String, String]
+    end
+
+    # ActiveModel validation failures as server-message entries (MSG-1..11).
+    module Messages
+      def self.entries: (untyped errors, ?client: untyped) -> Array[Hash[String, untyped]]
+      def self.wording: (untyped error) -> [ String, String, Hash[String, untyped]? ]
+      def self.templates_for: (Symbol type, String label, Symbol kind) -> Array[String]
+    end
+
+    # MSG-7's source for an ActiveModel app's validators.
+    class ValidatorSource
+      attr_reader name: String
+      def initialize: (?Array[Class]? classes) -> void
+      def collect: (untyped catalog) -> untyped
+    end
+
+    # Legacy-key migration's I18n.t entry point (MIG-2, MIG-8).
+    class I18nBridge
+      def self.install!: () -> void
+      attr_reader backend: untyped
+      def initialize: (untyped backend) -> void
+      def translate: (Symbol | String locale, untyped key, ?Hash[Symbol, untyped] options) -> untyped
     end
 
     module Controller

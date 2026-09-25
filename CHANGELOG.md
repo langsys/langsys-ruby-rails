@@ -6,6 +6,36 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Validation errors as translatable entries: `Langsys::Rails::Messages.entries(record)` builds them
+  from the failed rules and their options, with each field's `human_attribute_name` written into
+  the sentence; `ls_message(entry)` renders one in the request locale. Templates Langsys lacks are
+  registered after the response.
+- `rake langsys:messages` lists every validation template an app can emit and exits non-zero
+  naming each field with no label and each custom rule without declared templates;
+  `REGISTER=1` registers them. Models declare custom templates with `langsys_message_templates`.
+- Migration mode: with `config.langsys.migration` set, `I18n.t` and the `t` view helper look an
+  argument up as a key in the named source files first and treat anything else as source text.
+- `langsys_resolved_attributes`, for a layout's root element on a page rendered in a translated
+  locale.
+- `messages_category`, `migration` and `migration_locale` settings, passed to the base SDK.
+
+### Changed
+
+- The request locale comes from the base SDK's resolution: the URL parameter, then the locale
+  cookie, then `Accept-Language`, each validated against the project's locales. The response
+  carries `Vary` for whatever the choice depended on, and only a locale chosen in the URL is
+  written to the cookie.
+- Each request runs in a base-SDK request scope, so a phrase it discovers is registered only once
+  its own response has been sent.
+- Requires `activemodel`.
+
+### Removed
+
+- The `supported` setting and `Langsys::Rails.resolver`: the project's locales in Langsys decide
+  what is served.
+
 ### Changed
 
 - Discovered phrases are registered after the response has been sent, by

@@ -55,13 +55,13 @@ RSpec.describe "Binding conformance" do
     end
   end
 
-  describe "BIND-4 — configuration (partial: three settings pending the ambient-locale ruling)" do
+  describe "BIND-4 — no configuration the core does not define" do
     let(:core_keywords) do
       Langsys::Client.instance_method(:initialize).parameters.filter_map do |kind, name|
         name if %i[key keyreq].include?(kind)
       end
     end
-    let(:declared) { Langsys::Rails::Config::CORE_SETTINGS + Langsys::Rails::Config::LOCALE_SETTINGS }
+    let(:declared) { Langsys::Rails::Config::CORE_SETTINGS + Langsys::Rails::Config::WIRING_SETTINGS }
 
     def capture_client_kwargs
       received = nil
@@ -80,7 +80,7 @@ RSpec.describe "Binding conformance" do
     it "hands each configured core setting to the core client unchanged" do
       sentinels = { api_key: "k", project_id: "p", api_url: "https://sentinel.test/api", base_locale: "fr-FR",
                     cache: Langsys::Cache::Memory.new, cache_ttl: 7, timeout: 1.5, auto_flush: false,
-                    logger: Logger.new(IO::NULL) }
+                    logger: Logger.new(IO::NULL), messages_category: "Validation" }
       configure_langsys(**sentinels)
       expect(capture_client_kwargs.slice(*sentinels.keys)).to eq(sentinels)
     end
@@ -93,19 +93,39 @@ RSpec.describe "Binding conformance" do
       expect(capture_client_kwargs.fetch(:auto_flush)).to be(false)
     end
 
-    it "maps `supported` to the core's own locale-negotiation parameter" do
-      expect(Langsys::Client.instance_method(:detect_preferred_locale).parameters.map(&:last)).to include(:supported)
-    end
-
-    it "introduces exactly three settings the core has no equivalent for" do
-      expect(Langsys::Rails::Config::LOCALE_SETTINGS - %i[supported])
-        .to contain_exactly(:query_param, :cookie_name, :cookie_max_age)
+    it "adds only SRV-6's wiring: where the URL parameter and the locale cookie live" do
+      expect(Langsys::Rails::Config::WIRING_SETTINGS).to contain_exactly(:query_param, :cookie_name, :cookie_max_age)
+      expect(declared - core_keywords).to match_array(Langsys::Rails::Config::WIRING_SETTINGS)
     end
 
     it "accepts only declared settings, and the Railtie reads exactly those" do
       setters = Langsys::Rails::Config.public_instance_methods(false).grep(/\A\w+=\z/).map { |m| m.to_s.chomp("=").to_sym }
       expect(setters).to match_array(declared)
       expect(Langsys::Rails::Railtie::SETTINGS).to match_array(declared)
+    end
+  end
+
+  describe "GATE-10 — the layout helper marks resolved output" do
+    before do
+      stub_translations("es-es", { "UI" => { "Save" => "Guardar" } })
+      stub_translations("en-us", { "UI" => { "Save" => "Save" } })
+    end
+
+    it "marks the root of a page rendered in a locale other than the project's base" do
+      get "/layout?locale=es-ES"
+      expect(last_response.body).to eq('<html data-ls-resolved="es-es">Guardar</html>')
+    end
+
+    it "leaves a base-locale render unmarked, because it is source" do
+      get "/layout?locale=en-US"
+      expect(last_response.body).to eq("<html>Save</html>")
+    end
+
+    it "marks nothing when the project's base locale cannot be read" do
+      stub_request(:get, AUTHORIZE_URL).to_raise(Errno::ECONNREFUSED)
+      Langsys::Rails::CurrentLocale.locale = "es-ES"
+      helper = Object.new.extend(Langsys::Rails::Helper)
+      expect(helper.langsys_resolved_attributes).to eq({})
     end
   end
 
@@ -125,17 +145,18 @@ RSpec.describe "Binding conformance" do
       memos = Dir.glob(File.expand_path("../lib/**/*.rb", __dir__)).flat_map do |path|
         File.read(path).scan(/@(\w+)\s*\|\|=/).flatten
       end
-      expect(memos).to contain_exactly("config", "resolver", "client")
+      expect(memos).to contain_exactly("config", "client")
     end
   end
 
   describe "BIND-6 — the narrowest surface" do
     it "exposes the core client by reference plus framework idioms, and no behaviour of its own" do
       expect(Langsys::Rails.singleton_methods(false))
-        .to contain_exactly(:configure, :config, :resolver, :client, :client=, :reset_client!, :t, :locale)
+        .to contain_exactly(:configure, :config, :client, :client=, :reset_client!, :t, :locale)
       expect(client).to be_a(Langsys::Client)
       expect(Langsys::Rails.client).to equal(client)
-      expect(Langsys::Rails::Helper.public_instance_methods(false)).to eq([:ls])
+      expect(Langsys::Rails::Helper.public_instance_methods(false))
+        .to contain_exactly(:ls, :ls_message, :langsys_resolved_attributes)
     end
   end
 
@@ -212,6 +233,8 @@ RSpec.describe "Binding conformance" do
 
   describe "WIRE-5 — the API base can be redirected after first use" do
     def stub_base(base, text)
+      stub_request(:get, "#{base}/authorize-project/proj-1")
+        .to_return(json_response(authorize_body(key_type: "write", write_enabled: true)))
       stub_request(:get, "#{base}/translations")
         .with(query: hash_including("locale" => "es-es"))
         .to_return(json_response(catalog_body({ "UI" => { "Save" => text } })))

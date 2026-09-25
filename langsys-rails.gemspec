@@ -24,10 +24,11 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"] = "#{spec.homepage}/blob/main/CHANGELOG.md"
   spec.metadata["rubygems_mfa_required"] = "true"
 
-  spec.files = Dir["lib/**/*.rb", "sig/**/*.rbs", "README.md", "LICENSE", "CHANGELOG.md"]
+  spec.files = Dir["lib/**/*.rb", "lib/tasks/*.rake", "sig/**/*.rbs", "README.md", "LICENSE", "CHANGELOG.md"]
   spec.require_paths = ["lib"]
 
   spec.add_dependency "actionpack", ">= 6.1"
+  spec.add_dependency "activemodel", ">= 6.1"
   spec.add_dependency "activesupport", ">= 6.1"
   spec.add_dependency "langsys", ">= 0.1.0"
   spec.add_dependency "railties", ">= 6.1"
