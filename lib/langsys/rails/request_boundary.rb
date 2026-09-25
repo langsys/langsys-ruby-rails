@@ -15,7 +15,10 @@ module Langsys
     #   enters, and again once the request is done.
     # * REG-3 / SRV-3: discovered phrases are flushed before the request's context ends, and
     #   only after the response has been sent. Registration is not the visitor's work, so it
-    #   never spends their wait.
+    #   never spends their wait. The request runs inside a core request scope, so a miss it
+    #   records is held from every flush — including another request's — until its own
+    #   response is out. The scope needs no client, so it is open even for the request that
+    #   builds the client.
     #
     # Both calls are the base SDK's own. Whether this session may write, what is sent, what is
     # kept and what is logged are decided there (BIND-2); this class adapts timing only (BIND-1).
@@ -33,22 +36,37 @@ module Langsys
 
       def call(env)
         drop_decision
+        scope = Langsys.begin_request_scope
         if (finished = env["rack.response_finished"])
-          finished << ->(*) { complete }
+          finished << ->(*) { complete(scope) }
           return @app.call(env)
         end
 
-        status, headers, body = @app.call(env)
-        [status, headers, ::Rack::BodyProxy.new(body) { complete }]
+        status, headers, body = serve(env, scope)
+        [status, headers, ::Rack::BodyProxy.new(body) { complete(scope) }]
       end
 
       private
+
+      # With no body there is nothing for the server to close, so a raising application
+      # releases its scope here rather than holding its misses until shutdown.
+      def serve(env, scope)
+        returned = false
+        response = @app.call(env)
+        returned = true
+        response
+      ensure
+        Langsys.end_request_scope(scope) unless returned
+      end
 
       def drop_decision
         Langsys::Rails.send(:built_client)&.reset_write_decision!
       end
 
-      def complete
+      # Ends the scope before flushing: its misses are released by the end, and this flush
+      # is what sends them.
+      def complete(scope)
+        Langsys.end_request_scope(scope)
         client = Langsys::Rails.send(:built_client)
         return if client.nil?
 

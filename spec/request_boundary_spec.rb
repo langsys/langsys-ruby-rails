@@ -116,8 +116,6 @@ RSpec.describe Langsys::Rails::RequestBoundary do
     end
 
     it "does not let another request's flush collect a miss while its own render is still running" do
-      pending "the discovery queue is process-wide in langsys-ruby, so request B's post-response flush " \
-              "sends request A's miss mid-render; closing it needs a request-scope seam in the core"
       holding = Queue.new
       release = Queue.new
       EventsController.hold = lambda do |tag|
@@ -137,6 +135,35 @@ RSpec.describe Langsys::Rails::RequestBoundary do
       posted_a = events.index { |event| event.start_with?("posted:") && event.include?("A") }
       expect(posted_a).not_to be_nil
       expect(posted_a).to be > events.index("A:response-returned")
+    end
+  end
+
+  describe "SRV-3 — the request scope" do
+    it "is open for the request that builds the client" do
+      Langsys::Rails.reset_client!
+      stub_authorize(key_type: "write", write_enabled: true)
+      stub_translations("en-us", { "UI" => {} })
+      stub_registration
+      RenderPlan.phrases = [["Built mid-request", "UI"]]
+      _, _, _, body = call_app("/plan")
+      built = Langsys::Rails.client
+      expect(built.flush_pending["reason"]).to eq("held_by_request")
+      read_body(body)
+      body.close
+      expect(built.registered?("UI", "Built mid-request")).to be(true)
+    end
+
+    it "is released when the application raises, so its misses are not held until shutdown" do
+      stub_authorize(key_type: "write", write_enabled: true)
+      stub_translations("en-us", { "UI" => {} })
+      stub_registration
+      failing = described_class.new(lambda do |_env|
+        Langsys::Rails.t("Seen before the error", "UI")
+        raise "boom"
+      end)
+      expect { failing.call(Rack::MockRequest.env_for("/")) }.to raise_error("boom")
+      expect(client.flush_pending["success"]).to be(true)
+      expect(client.registered?("UI", "Seen before the error")).to be(true)
     end
   end
 

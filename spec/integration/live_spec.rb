@@ -114,6 +114,34 @@ RSpec.describe "Rails binding, live", :integration do
       expect(server_holds?(miss)).to be(true)
     end
 
+    it "holds a render's miss from another request's flush until its own response is sent" do
+      configure_live(key: write_key)
+      Langsys::Rails.client
+      run = SecureRandom.hex(6)
+      tag_a = "A-#{run}"
+      tag_b = "B-#{run}"
+      holding = Queue.new
+      release = Queue.new
+      EventsController.hold = lambda do |tag|
+        next unless tag == tag_a
+
+        holding << true
+        release.pop
+      end
+      a = Thread.new do
+        _, _, _, body = call_app("/events?tag=#{tag_a}")
+        read_body(body)
+        body.close
+      end
+      holding.pop
+      get "/events?tag=#{tag_b}" # B completes and flushes while A is still rendering
+      expect(server_holds?("Miss #{tag_b}", "UI")).to be(true) # positive control: B's flush ran
+      expect(server_holds?("Miss #{tag_a}", "UI")).to be(false)
+      release << true
+      a.join(15)
+      expect(server_holds?("Miss #{tag_a}", "UI")).to be(true)
+    end
+
     it "pushes nothing from a read-only key, while the same render on a write key does" do
       miss = unique("SRV-3 read-only")
       RenderPlan.phrases = [[miss, "CAT_3"]]

@@ -7,8 +7,8 @@
 | **specVersion** | 8.0.1 (79 rules) |
 | **Profiles** | server, binding, all — derived: binding over langsys-ruby |
 | **SDK revision** | `feature/838_write_key_gating`, cut from `main` `2751820` |
-| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes last run against `a96633e`, a clean checkout of that commit |
-| **Suite** | 73 hermetic examples, 1 pending by design (`rake spec`) · 9 live (`rake integration`) · 20 hermetic and 6 live mutants (`rake mutation`, `rake mutation:live`) |
+| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes last run against `9b68659`, a clean checkout of that commit |
+| **Suite** | 75 hermetic examples (`rake spec`) · 10 live (`rake integration`) · 22 hermetic and 7 live mutants (`rake mutation`, `rake mutation:live`) |
 
 **On the Profiles row.** The spec's Profiles table never names Rails, or any server framework
 binding. The row is derived: a binding "inherits its core's profile and adds nothing of its own",
@@ -29,13 +29,13 @@ fix — not from reading it.
    read-only deployment put no line in the log over three requests. With the `after_action`
    flush, the fixture server already held a render's miss before the response body was closed, on
    both the body-close and `rack.response_finished` paths.
-3. **SRV-3 has a residual the binding cannot close.** The core's own timer cannot post early —
-   `flush_if_due` is defined and nothing calls it — measured through a render held past the 0.4s
-   debounce: `miss-recorded, holding, rendered, response-returned, body-sent, posted, body-closed`.
-   But the discovery queue is process-wide: with request A held mid-render while request B
-   completes, B's post-response flush sends A's miss —
-   `A:miss-recorded, B:miss-recorded, B:rendered, B:response-returned, B:body-sent, posted:A+B,
-   B:body-closed, A:rendered, A:response-returned`. Closing it needs a request-scope seam in the core.
+3. **Ordering within one request was not enough for SRV-3.** The core's own timer cannot post
+   early — `flush_if_due` is defined and nothing calls it — measured through a render held past
+   the 0.4s debounce. But the discovery queue is process-wide, so with request A held mid-render
+   while request B completed, B's post-response flush sent A's miss before A's response was out.
+   The binding may not schedule around that (BIND-3); the core now holds a miss recorded inside a
+   request scope from every flush until that scope ends, and `RequestBoundary` opens one scope per
+   request. The scope is module-level, so it is open even for the request that builds the client.
 4. **A core defect reached every `ls` without params.** `Client#interpolate` skipped recovery
    when params were empty, so `ls "Welcome"` with a translation selecting on `gender` rendered the
    raw ICU source to the visitor — the spec's own motivating case. Found through the BIND-1
@@ -126,7 +126,7 @@ whose property does not depend on what the API answers.
 | SSR-3 | n/a (profile: browser) | - | SSR constrains the browser SDK under a server render. |
 | SRV-1 | implemented | live | `spec/integration/live_spec.rb` › "serves the request locale's translation in the response bytes, and the base language only for a miss": `ls` under `?locale=es-ES` serves the fixture's `Soporte Técnico` in the response body, and a control phrase absent from the catalog serves its source text and is held by the server afterwards. Mutant `live-serves-base-language`. |
 | SRV-2 | implemented | n/a (pure) | `spec/binding_conformance_spec.rb` › "serves each of two renders suspended mid-flight together only its own locale's text": a two-party rendezvous inside the render holds an es-ES and a de-DE request mid-walk at once, and the meeting itself is asserted, so a fall-back to sequential renders fails. Mutant `process-global-locale`. Tier: an isolation property a stateful fixture could not prove or disprove. |
-| SRV-3 | partial | live | **Met for one request.** The flush runs only after the response is sent, on both completion paths (REG-3's live examples); a read-only key pushes nothing, with the same render on a write key as positive control (live › "pushes nothing from a read-only key, while the same render on a write key does"); and `spec/request_boundary_spec.rb` › "posts nothing before the response is sent, even when the render outlasts the core's debounce window" pins the order of events. Mutants `flush-on-the-request-path`, `response-finished-path-ignored`, `boundary-behind-the-executor`, `live-flush-on-the-request-path`, `live-response-finished-ignored`. **Not met across concurrent requests:** request B's post-response flush collects request A's miss while A is still rendering (What surfaced, item 3). The core's discovery queue carries no request scope and the binding may not schedule around it (BIND-3). Pinned by the `pending` example "does not let another request's flush collect a miss while its own render is still running", which fails the build once the core closes the gap. |
+| SRV-3 | implemented | live | Collection runs after the response is sent, on both completion paths: `spec/integration/live_spec.rb` › "registers a render's miss only once the server closes the body" and › "registers a render's miss only once the server runs rack.response_finished". Across overlapping requests: live › "holds a render's miss from another request's flush until its own response is sent" — request B completes and flushes while request A is held mid-render; the server holds B's miss (positive control) and not A's until A's response is out. `RequestBoundary` opens a core request scope per request and ends it before flushing; `spec/request_boundary_spec.rb` › "is open for the request that builds the client" and › "is released when the application raises, so its misses are not held until shutdown". A read-only key pushes nothing, with the same render on a write key as positive control (live › "pushes nothing from a read-only key, while the same render on a write key does"). Order of events for one request: › "posts nothing before the response is sent, even when the render outlasts the core's debounce window". Mutants `flush-on-the-request-path`, `response-finished-path-ignored`, `boundary-behind-the-executor`, `no-request-scope`, `scope-held-after-error`, `live-flush-on-the-request-path`, `live-response-finished-ignored`, `live-no-request-scope`. |
 | SRV-4 | n/a (architecture: Rails views emit terminal HTML and this binding takes part in no hydration hand-off, so there is no client catalog to seed; live if the binding ever seeds a client-side Langsys SDK before hydration) | - | 8.0.1 scopes SRV-4 to an SDK that participates in a hydration hand-off. |
 | SRV-5 | delegated | - | Core row: langsys-ruby SRV-5. Absence probe › "tokenizer and host identity": lib/ captures no component children (`ls` takes a string); subtree walks reached through `Langsys::Rails.client` are the core's. |
 | BIND-1 | implemented | n/a (pure) | `spec/binding_conformance_spec.rb` › "renders and queues exactly what calling the core directly does": eight vectors (hit, miss, no category, `%name%`, a plural with its argument supplied, missing and null, a null plain argument), comparing output and the resulting queue with `Langsys::Client#translate` called directly; › "makes the ls helper the same call as Langsys::Rails.t". The binding's timing adaptations are the request boundary (GATE-3, REG-3, SRV-3). Mutant `t-adapts-meaning`. |
@@ -148,7 +148,7 @@ whose property does not depend on what the API answers.
 | WIRE-5 | implemented | live | `api_url` passes through to the core and is documented in the README's Setup and Configuration sections. `spec/integration/live_spec.rb` › "takes a redirect made after first use: a dead address degrades, then the live one translates": the Spanish can only have come from the live server, so the redirect arrived; reconfiguring rebuilds the client, so the too-late failure WIRE-5 names cannot happen. Mutants `stale-client-after-redirect`, `live-stale-client-after-redirect`. |
 | CONF-1 | implemented | n/a (pure) | Every row graded `live` asserts on the served bytes or on server state read back through a separate, uncached client — never on what the binding sent. Every-path clause: REG-3 and SRV-3 are proven on both completion paths (body close and `rack.response_finished`), GATE-7 on both entry points (`t` and `ls`). WebMock-backed examples carry no `live` or `contract` grade. |
 | CONF-2 | implemented | n/a (pure) | Every row carries a canonical tier. `spec/conformance_doc_spec.rb` checks the header rows, one status table, all 79 ids once each in spec order, the status and tier vocabulary, the tiers each status permits, and a summary computed from the table. Mutant `summary-drifts-from-table`. |
-| CONF-3 | implemented | n/a (pure) | `spec/mutation/manifest.rb`, run by `rake mutation` (20 hermetic mutants) and `rake mutation:live` (6 live). An entry must apply exactly once; its examples must be green, with none pending, before the edit, and red without a load error after it; the file is then restored byte for byte. Result on this tree: 20/20 hermetic and 6/6 live mutants killed. |
+| CONF-3 | implemented | n/a (pure) | `spec/mutation/manifest.rb`, run by `rake mutation` (22 hermetic mutants) and `rake mutation:live` (7 live). An entry must apply exactly once; its examples must be green, with none pending, before the edit, and red without a load error after it; the file is then restored byte for byte. Result on this tree: 22/22 hermetic and 7/7 live mutants killed. |
 
 ## Summary
 
@@ -156,9 +156,9 @@ Computed from the table above; `spec/conformance_doc_spec.rb` fails the build wh
 
 | Status | Count |
 |---|---|
-| implemented | 16 |
+| implemented | 17 |
 | delegated | 39 |
-| partial | 2 |
+| partial | 1 |
 | n/a (profile: browser) | 20 |
 | n/a (architecture) | 2 |
 | total | 79 |
@@ -172,7 +172,9 @@ Railtie inserts in front of `ActionDispatch::Executor`:
 - **GATE-3 — the request-boundary reset.** `Client#reset_write_decision!` as a request enters and
   again once it completes.
 - **REG-3 — the host lifecycle flush.** `Client#flush_pending` once the response has been sent,
-  on whichever completion path the server provides.
+  on whichever completion path the server provides, inside a core request scope
+  (`Langsys.begin_request_scope` / `Langsys.end_request_scope`) so no other request's flush
+  sends this request's misses early (SRV-3).
 
 ## Gaps, ranked by cost
 
@@ -182,10 +184,7 @@ Railtie inserts in front of `ActionDispatch::Executor`:
 2. **Unvalidated `?locale=` kept for a year** (BIND-4, same ruling). A crafted link pins a
    browser to a failed catalog round trip on every request. Latency for that visitor, load on the
    API.
-3. **Cross-request collection** (SRV-3, needs a core seam). A miss can be sent by another
-   request's post-response flush while its own render is still running. The spec's MUST is unmet;
-   the cost falls on the flushing request's thread, not on the visitor still waiting.
-4. **Three binding-only settings** (BIND-4, same ruling). Ownership of configuration, no runtime
+3. **Three binding-only settings** (BIND-4, same ruling). Ownership of configuration, no runtime
    cost.
 
 ## Release wave

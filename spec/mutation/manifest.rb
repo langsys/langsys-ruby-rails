@@ -21,7 +21,7 @@ module Mutation
 
   T_CALL = "        client.translate(phrase, category: category, params: params.empty? ? nil : params)\n"
   FLUSH = "          client.flush_pending\n"
-  BODY_PROXY = "        [status, headers, ::Rack::BodyProxy.new(body) { complete }]\n"
+  BODY_PROXY = "        [status, headers, ::Rack::BodyProxy.new(body) { complete(scope) }]\n"
   FINISHED = "        if (finished = env[\"rack.response_finished\"])\n"
   LOGGER_FALLBACK = "        options[:logger] ||= rails_logger\n"
   RECONFIGURE = "        reset_client!\n        config\n"
@@ -44,7 +44,7 @@ module Mutation
     { id: "boundary-never-flushes", rule: "REG-3", file: BOUNDARY, find: FLUSH, replace: "          nil\n",
       examples: examples(BOUNDARY_SPEC, "on the body-close path") },
     { id: "flush-on-the-request-path", rule: "SRV-3", file: BOUNDARY, find: BODY_PROXY,
-      replace: "        complete\n        [status, headers, body]\n",
+      replace: "        complete(scope)\n        [status, headers, body]\n",
       examples: examples(BOUNDARY_SPEC, "on the body-close path", "posts nothing before the response is sent") },
     { id: "response-finished-path-ignored", rule: "SRV-3", file: BOUNDARY, find: FINISHED,
       replace: "        if (finished = nil)\n",
@@ -54,6 +54,12 @@ module Mutation
       replace: "config.app_middleware.insert_after ActionDispatch::Executor, RequestBoundary",
       examples: examples(BOUNDARY_SPEC, "sits in front of ActionDispatch::Executor",
                          "only after Rails has completed the request") },
+    { id: "no-request-scope", rule: "SRV-3", file: BOUNDARY,
+      find: "        scope = Langsys.begin_request_scope\n", replace: "        scope = nil\n",
+      examples: examples(BOUNDARY_SPEC, "does not let another request's flush collect a miss") },
+    { id: "scope-held-after-error", rule: "SRV-3", file: BOUNDARY,
+      find: "        Langsys.end_request_scope(scope) unless returned\n", replace: "        nil\n",
+      examples: examples(BOUNDARY_SPEC, "is released when the application raises") },
     { id: "decision-kept-after-request", rule: "GATE-3", file: BOUNDARY,
       find: "          client.reset_write_decision!\n", replace: "          nil\n",
       examples: examples(BOUNDARY_SPEC, "is dropped once the request is done") },
@@ -107,16 +113,19 @@ module Mutation
 
     # -- the conformance document --------------------------------------------------------
     { id: "summary-drifts-from-table", rule: "CONF-2", file: "CONFORMANCE.md",
-      find: "| implemented | 16 |", replace: "| implemented | 17 |",
+      find: "| implemented | 17 |", replace: "| implemented | 18 |",
       examples: examples(DOC_SPEC, "has a summary computed from the table") },
 
     # -- live: the same breaks, observed against the real server ---------------------------
     { id: "live-flush-on-the-request-path", rule: "SRV-3", live: true, file: BOUNDARY, find: BODY_PROXY,
-      replace: "        complete\n        [status, headers, body]\n",
+      replace: "        complete(scope)\n        [status, headers, body]\n",
       examples: examples(LIVE_SPEC, "registers a render's miss only once the server closes the body") },
     { id: "live-response-finished-ignored", rule: "SRV-3", live: true, file: BOUNDARY, find: FINISHED,
       replace: "        if (finished = nil)\n",
       examples: examples(LIVE_SPEC, "registers a render's miss only once the server runs rack.response_finished") },
+    { id: "live-no-request-scope", rule: "SRV-3", live: true, file: BOUNDARY,
+      find: "        scope = Langsys.begin_request_scope\n", replace: "        scope = nil\n",
+      examples: examples(LIVE_SPEC, "holds a render's miss from another request's flush") },
     { id: "live-serves-base-language", rule: "SRV-1", live: true, file: MODULE, find: T_CALL,
       replace: "        client.translate(phrase, category: category, params: params.empty? ? nil : params, " \
                "locale: config.base_locale)\n",
