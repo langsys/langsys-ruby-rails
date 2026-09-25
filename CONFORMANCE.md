@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **SDK** | `langsys-ruby-rails` — the Rails binding over the `langsys` Ruby gem |
-| **Spec revision read** | langsys2 9b23f3d8…, docs/sdk-spec.mdx blob 33bbc4095ef2d13a55926b71045a7094f6b9706a |
-| **specVersion** | 8.2.14 (113 rules) |
+| **Spec revision read** | langsys2 f5568b88…, docs/sdk-spec.mdx blob b9fd4b5b1c15f7ba29656d550dca1f06013327c0 |
+| **specVersion** | 8.2.15 (113 rules) |
 | **Profiles** | server, binding — derived: binding over langsys-ruby |
 | **SDK revision** | `feature/838_write_key_gating` |
-| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes run against `0344155`, a clean checkout of that commit |
+| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes run against `91cf981`, a clean checkout of that commit |
 | **Contract double** | `spec/contract-fixture/`, vendored byte-exact from langsys-js-typescript, git tree `542f57f5ffcb9038db1b7411152b7e31b96cb269` (the suite recomputes the tree id) |
-| **Suite** | 113 hermetic examples, among them 4 against the contract double (`rake spec`) · 18 live (`rake integration`) · 38 hermetic and 10 live mutants (`rake mutation`, `rake mutation:live`) |
+| **Suite** | 117 hermetic examples, among them 4 against the contract double (`rake spec`) · 20 live (`rake integration`) · 40 hermetic and 11 live mutants (`rake mutation`, `rake mutation:live`) |
 
 `delegated` rows name the core's row and carry tier `-`: the behaviour's tier lives on that row,
 and the evidence here is an absence probe with a firing control proving this binding does not
@@ -31,10 +31,12 @@ Every item came from executing code.
    the failing field and writes the confirmed field's label into the sentence.
 4. **A nested error attribute is not a method.** `items[3].label` cannot be read from the record;
    the size code then falls back to text, and the field is written `items.3.label`.
-5. **Two core additions came from this lane's wiring.** The layout helper's decision is the core's
-   `Client#resolved_locale`, so a binding does not re-derive "differs from the base locale"; and
-   the I18n bridge asks `Migration#key?`, which answers without logging, because every Rails
-   internal lookup passes through the bridge and falls through.
+5. **Three core additions came from this lane's wiring.** The layout helper's decision is the core's
+   `Client#resolved_locale`, so a binding does not re-derive "differs from the base locale"; the
+   I18n bridge asks `Migration#key?`, which answers without logging, because every Rails internal
+   lookup passes through the bridge and falls through; and with authorization unavailable, locale
+   resolution validates against a seeded snapshot's own locales — without that, an offline first
+   request to a translated locale was resolved to the base locale and the snapshot went unread.
 6. **ActiveModel is a runtime dependency.** The normalizer and the listing read ActiveModel's
    errors and validators; every Rails app carries the gem.
 
@@ -129,11 +131,11 @@ Every item came from executing code.
 | MIG-5 | delegated | - | Core row: langsys-ruby MIG-5. Absence probe `spec/delegation_probe_spec.rb` › "legacy conversion and import"; firing control on the core. |
 | MIG-6 | delegated | - | Core row: langsys-ruby MIG-6. Absence probe `spec/delegation_probe_spec.rb` › "legacy conversion and import"; firing control on the core. |
 | MIG-7 | delegated | - | Core row: langsys-ruby MIG-7. Absence probe `spec/delegation_probe_spec.rb` › "legacy conversion and import"; firing control on the core. |
-| MIG-8 | implemented | n/a (pure) | The bridge is the Rails entry point of the one contract, reading the core's file configuration: › "gives a key through I18n.t the same phrase and category as the base SDK's translate_legacy". Mutant `bridge-overrides-category`. |
+| MIG-8 | implemented | n/a (pure) | The bridge is the Rails entry point of the one contract, reading the core's file configuration, per ecosystem as 8.2.15 words the test: › "gives a plural key through I18n.t the same phrase and category as the core, from a rails-i18n file" and › "gives a key through I18n.t the same phrase and category as the base SDK's translate_legacy". Agreement across ecosystems is the `same_phrase_as` rows of `mig-vectors.json`, which the core executes. Mutant `bridge-overrides-category`. |
 | MIG-9 | delegated | - | Core row: langsys-ruby MIG-9. Absence probe `spec/delegation_probe_spec.rb` › "legacy conversion and import"; firing control on the core. |
-| SNAP-1 | delegated | - | Core row: langsys-ruby SNAP-1. Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
-| SNAP-2 | delegated | - | Core row: langsys-ruby SNAP-2 — the synchronous snapshot loader, held until the shared snapshot vectors land (format pinned at 8.2.14). This binding will pass an app setting naming the snapshot file to the core client, so it is seeded at startup; until the core exposes the loader the binding loads nothing itself: Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
-| SNAP-3 | delegated | - | Core row: langsys-ruby SNAP-3. Absence probe `spec/delegation_probe_spec.rb` › "snapshots"; firing control on the core. |
+| SNAP-1 | delegated | - | Core row: langsys-ruby SNAP-1. Absence probe `spec/delegation_probe_spec.rb` › "snapshot export and integrity"; firing control on the core. |
+| SNAP-2 | implemented | live | `config.langsys.snapshot` names a snapshot file, passed unchanged to the core's `Client.new(snapshot:)`; the Railtie builds the client at boot when one is configured, so the catalog is seeded before the first request and a snapshot the core refuses fails the boot. Live, with the API unreachable: `spec/integration/live_spec.rb` › "renders a first request from the snapshot with the API unreachable" — a full Rails request to `?locale=es-ES` serves the snapshot's translation, the locale validated against the snapshot's own locales. Live › "fetches the live catalog for a phrase the snapshot lacks, and decides that miss against it" — the miss is held by the server afterwards. Hermetic: `spec/snapshot_spec.rb` › "renders the first request from the snapshot, with no catalog fetch", › "builds the client at boot when a snapshot is configured, and not otherwise", › "fails the boot, naming the reason, when the snapshot was edited". Mutants `snapshot-not-seeded-at-boot`, `snapshot-not-passed`, `live-snapshot-not-passed`. |
+| SNAP-3 | delegated | - | Core row: langsys-ruby SNAP-3. Absence probe `spec/delegation_probe_spec.rb` › "snapshot export and integrity"; firing control on the core. |
 | BIND-1 | implemented | n/a (pure) | `spec/binding_conformance_spec.rb` › "renders and queues exactly what calling the core directly does" (eight vectors, output and resulting queue compared with `Langsys::Client#translate`) and › "makes the ls helper the same call as Langsys::Rails.t". Timing adaptations are the request boundary (GATE-3, REG-3, SRV-3); shape adaptations are the controller's request-to-locale plumbing (SRV-6), the error normalizer (MSG-9) and the I18n bridge (MIG-2). Mutant `t-adapts-meaning`. |
 | BIND-2 | implemented | n/a (pure) | Absence probe `spec/delegation_probe_spec.rb` › "capability decision" finds no capability value in lib/; firing control: core. `spec/request_boundary_spec.rb` › "does not discard a read-only session's queue; the core decides what happens to it". Mutant `boundary-branches-on-capability`. |
 | BIND-3 | implemented | n/a (pure) | Absence probe `spec/delegation_probe_spec.rb` › "request construction", "send scheduling" and "batching" find nothing in lib/; firing controls: core. Calling the core's `flush_pending` when a request completes is lifecycle timing, which BIND-1 permits and the core's CONFORMANCE assigns to this wrapper. |
@@ -154,7 +156,7 @@ Every item came from executing code.
 | WIRE-5 | implemented | live | `api_url` passes to the core and is documented in the README. Live › "takes a redirect made after first use: a dead address degrades, then the live one translates"; reconfiguring rebuilds the client. The contract suite runs entirely through the same seam. Mutants `stale-client-after-redirect`, `live-stale-client-after-redirect`. |
 | CONF-1 | implemented | n/a (pure) | Every row graded `live` asserts on the served bytes or on server state read back through a separate, uncached client; `contract` rows read the double's state. Every-path clause: REG-3 and SRV-3 on both completion paths, GATE-7 on both entry points, MSG-5 through a rendered form. WebMock-backed examples carry no `live` or `contract` grade. |
 | CONF-2 | implemented | n/a (pure) | Every row carries a canonical tier. `spec/conformance_doc_spec.rb` checks the header rows, one status table, all 113 ids once each in spec order, the status and tier vocabulary and the tiers each status permits, and a summary computed from the table. The contract double is vendored byte-exact at tree 542f57f5 and re-derived by the suite. Mutant `summary-drifts-from-table`. |
-| CONF-3 | implemented | n/a (pure) | `spec/mutation/manifest.rb`, run by `rake mutation` (38 hermetic mutants) and `rake mutation:live` (10 live). An entry must apply exactly once; its examples must be green, with none pending, before the edit, and red without a load error after it; the file is then restored byte for byte. Result on this tree: 38/38 hermetic and 10/10 live mutants killed. |
+| CONF-3 | implemented | n/a (pure) | `spec/mutation/manifest.rb`, run by `rake mutation` (40 hermetic mutants) and `rake mutation:live` (11 live). An entry must apply exactly once; its examples must be green, with none pending, before the edit, and red without a load error after it; the file is then restored byte for byte. Result on this tree: 40/40 hermetic and 11/11 live mutants killed. |
 
 ## Summary
 
@@ -162,8 +164,8 @@ Computed from the table above; `spec/conformance_doc_spec.rb` fails the build wh
 
 | Status | Count |
 |---|---|
-| implemented | 34 |
-| delegated | 54 |
+| implemented | 35 |
+| delegated | 53 |
 | n/a (profile: browser) | 21 |
 | n/a (architecture) | 4 |
 | total | 113 |
@@ -209,9 +211,9 @@ The commands, not the values, are the record:
 
 ```
 # The spec blob and rule ids this file rows against
-git -C ../langsys2 rev-parse 9b23f3d8:docs/sdk-spec.mdx
-#   -> 33bbc4095ef2d13a55926b71045a7094f6b9706a
-git -C ../langsys2 cat-file blob 33bbc409 | grep -cE '^### [A-Z]+-[0-9]+ '
+git -C ../langsys2 rev-parse f5568b88:docs/sdk-spec.mdx
+#   -> b9fd4b5b1c15f7ba29656d550dca1f06013327c0
+git -C ../langsys2 cat-file blob b9fd4b5b | grep -cE '^### [A-Z]+-[0-9]+ '
 #   -> 113
 
 # Hermetic suite (includes the contract double), lint, signatures, hermetic mutants

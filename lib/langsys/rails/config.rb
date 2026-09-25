@@ -11,7 +11,7 @@ module Langsys
       # falls back to Rails.logger so the base SDK's diagnostics land in the application log.
       CORE_SETTINGS = %i[
         api_key project_id api_url base_locale cache cache_ttl timeout auto_flush logger
-        messages_category migration migration_locale
+        messages_category migration migration_locale snapshot
       ].freeze
 
       # Where Rails keeps the values SRV-6's locale resolution reads: the URL parameter, and the

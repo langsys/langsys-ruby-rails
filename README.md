@@ -191,6 +191,7 @@ Set any of these on `config.langsys`:
 | `logger` | `Rails.logger` | receives the base SDK's diagnostics |
 | `messages_category` | `"Errors"` | category validation-error templates register under |
 | `migration` / `migration_locale` | off | source-language files for migration mode |
+| `snapshot` | none | a catalog snapshot to load at boot, so the first request renders with no fetch |
 | `cache` / `cache_ttl` / `timeout` | base SDK defaults | e.g. `Langsys::Cache::Memory.new` |
 
 ## Development

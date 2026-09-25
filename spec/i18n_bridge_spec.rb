@@ -68,6 +68,16 @@ RSpec.describe Langsys::Rails::I18nBridge do
   describe "MIG-8 — one contract behind every entry point" do
     before { migrate! }
 
+    it "gives a plural key through I18n.t the same phrase and category as the core, from a rails-i18n file" do
+      I18n.t("cart.items", count: 2)
+      through_i18n = queued
+      client.clear_pending
+      client.translate_legacy("cart.items", entry_point: :rails, params: { count: 2 })
+      expect(queued).to eq(through_i18n)
+      expect(through_i18n).to eq([{ "phrase" => "{count, plural, =0 {Your cart is empty} one {# item} other {# items}}",
+                                    "category" => "cart" }])
+    end
+
     it "gives a key through I18n.t the same phrase and category as the base SDK's translate_legacy" do
       I18n.t("checkout.greeting", name: "Ada")
       through_i18n = queued

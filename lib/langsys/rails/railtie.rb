@@ -36,6 +36,14 @@ module Langsys
         Langsys::Rails::I18nBridge.install! if Langsys::Rails.config.migration
       end
 
+      # SNAP-2: a configured snapshot seeds the catalog when the app boots, so the first request
+      # renders with no fetch, and a snapshot the base SDK refuses fails the boot rather than a request.
+      config.after_initialize { Langsys::Rails::Railtie.seed_snapshot! }
+
+      def self.seed_snapshot!
+        Langsys::Rails.client if Langsys::Rails.config.snapshot
+      end
+
       rake_tasks { load File.expand_path("../../tasks/langsys.rake", __dir__) }
 
       initializer "langsys.integrate" do

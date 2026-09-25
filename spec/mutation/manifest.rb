@@ -25,6 +25,7 @@ module Mutation
   MESSAGES_SPEC = "spec/messages_spec.rb"
   BRIDGE_SPEC = "spec/i18n_bridge_spec.rb"
   CONTRACT_SPEC = "spec/contract_spec.rb"
+  SNAPSHOT_SPEC = "spec/snapshot_spec.rb"
 
   T_CALL = "        client.translate(phrase, category: category, params: params.empty? ? nil : params)\n"
   FLUSH = "          client.flush_pending\n"
@@ -182,9 +183,17 @@ module Mutation
       replace: "        client.translate_legacy(argument, entry_point: :rails, category: \"legacy\", params: params(options))\n",
       examples: examples(BRIDGE_SPEC, "gives a key through I18n.t the same phrase and category") },
 
+    # -- snapshots (SNAP-2) ----------------------------------------------------------------------
+    { id: "snapshot-not-seeded-at-boot", rule: "SNAP-2", file: RAILTIE,
+      find: "        Langsys::Rails.client if Langsys::Rails.config.snapshot\n", replace: "        nil\n",
+      examples: examples(SNAPSHOT_SPEC, "builds the client at boot when a snapshot is configured") },
+    { id: "snapshot-not-passed", rule: "SNAP-2", file: MODULE,
+      find: "        options = config.core_options\n", replace: "        options = config.core_options.except(:snapshot)\n",
+      examples: examples(SNAPSHOT_SPEC, "renders the first request from the snapshot") },
+
     # -- the conformance document --------------------------------------------------------
     { id: "summary-drifts-from-table", rule: "CONF-2", file: "CONFORMANCE.md",
-      find: "| implemented | 34 |", replace: "| implemented | 35 |",
+      find: "| implemented | 35 |", replace: "| implemented | 36 |",
       examples: examples(DOC_SPEC, "has a summary computed from the table") },
 
     # -- live: the same breaks, observed against the real server ---------------------------
@@ -205,6 +214,9 @@ module Mutation
     { id: "live-template-never-registered", rule: "MSG-8", live: true, file: MESSAGES, find: EMIT,
       replace: "          Langsys::Messages.entry(code: code, template: template, params: params, field: field_path(error.attribute))\n",
       examples: examples(LIVE_SPEC, "registers a template the catalog lacks under Errors") },
+    { id: "live-snapshot-not-passed", rule: "SNAP-2", live: true, file: MODULE,
+      find: "        options = config.core_options\n", replace: "        options = config.core_options.except(:snapshot)\n",
+      examples: examples(LIVE_SPEC, "renders a first request from the snapshot with the API unreachable") },
     { id: "live-serves-base-language", rule: "SRV-1", live: true, file: MODULE, find: T_CALL,
       replace: "        client.translate(phrase, category: category, params: params.empty? ? nil : params, " \
                "locale: config.base_locale)\n",

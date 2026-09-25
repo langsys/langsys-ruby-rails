@@ -10,10 +10,10 @@ require "spec_helper"
 module ConformanceDoc
   PATH = File.expand_path("../CONFORMANCE.md", __dir__)
 
-  SPEC_BLOB = "33bbc4095ef2d13a55926b71045a7094f6b9706a"
+  SPEC_BLOB = "b9fd4b5b1c15f7ba29656d550dca1f06013327c0"
 
   # The rule ids of docs/sdk-spec.mdx at SPEC_BLOB, in document order. Derived, not recalled:
-  #   git -C ../langsys2 cat-file blob 33bbc409 | grep -oE '^### [A-Z]+-[0-9]+ ' | cut -c5- | tr -d ' '
+  #   git -C ../langsys2 cat-file blob b9fd4b5b | grep -oE '^### [A-Z]+-[0-9]+ ' | cut -c5- | tr -d ' '
   # Hard-coded because the spec lives in a sibling repo that need not be present at test time.
   RULE_IDS = %w[
     GATE-1 GATE-2 GATE-3 GATE-4 GATE-5 GATE-6 GATE-7 GATE-8 GATE-9 GATE-10
@@ -31,7 +31,7 @@ module ConformanceDoc
   ].freeze
 
   HEADER_ROWS = [
-    "| **Spec revision read** | langsys2 9b23f3d8…, docs/sdk-spec.mdx blob #{SPEC_BLOB} |",
+    "| **Spec revision read** | langsys2 f5568b88…, docs/sdk-spec.mdx blob #{SPEC_BLOB} |",
     "| **Profiles** | server, binding — derived: binding over langsys-ruby |"
   ].freeze
 

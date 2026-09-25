@@ -20,6 +20,8 @@ All notable changes to this project are documented here. The format follows
 - `langsys_resolved_attributes`, for a layout's root element on a page rendered in a translated
   locale.
 - `messages_category`, `migration` and `migration_locale` settings, passed to the base SDK.
+- A `snapshot` setting: a catalog snapshot the app loads at boot, so the first request renders with
+  no fetch; a snapshot the base SDK refuses fails the boot.
 
 ### Changed
 

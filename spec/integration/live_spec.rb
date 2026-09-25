@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "securerandom"
+require "tmpdir"
 require "support/test_app"
 
 # Live evidence against a real Langsys backend: the rows graded `live` in CONFORMANCE.md.
@@ -287,6 +288,39 @@ RSpec.describe "Rails binding, live", :integration do
       expect(run.call).to eq([0, 0])
     ensure
       I18n.reload!
+    end
+  end
+
+  describe "SNAP-2 — a snapshot seeds the catalog at boot" do
+    around { |example| Dir.mktmpdir { |dir| @dir = dir and example.run } }
+
+    def snapshot_with(translation)
+      path = File.join(@dir, "snapshot.json")
+      Langsys::Snapshot.new(project_id: ENV.fetch("LANGSYS_PROJECT_ID"), generated_at: "2026-09-24T00:00:00Z",
+                            base_locale: "en-us", locales: ["es-es"], categories: ["CAT_3"],
+                            catalog: { "es-es" => { "CAT_3" => { "Technical Support" => translation } } }).write(path)
+      path
+    end
+
+    it "renders a first request from the snapshot with the API unreachable" do
+      configure_live(key: write_key, api_url: "http://127.0.0.1:9/api",
+                     snapshot: snapshot_with("Soporte (instantánea)"))
+      Langsys::Rails::Railtie.seed_snapshot!
+      RenderPlan.phrases = [["Technical Support", "CAT_3"]]
+      get "/plan?locale=es-ES"
+      expect(last_response.status).to eq(200)
+      expect(last_response.body).to eq("Soporte (instantánea)")
+    end
+
+    it "fetches the live catalog for a phrase the snapshot lacks, and decides that miss against it" do
+      configure_live(key: write_key, snapshot: snapshot_with("Soporte (instantánea)"))
+      Langsys::Rails::Railtie.seed_snapshot!
+      miss = unique("SNAP-2 miss")
+      RenderPlan.phrases = [[miss, "CAT_3"]]
+      get "/plan?locale=es-ES"
+      expect(last_response.body).to eq(miss)
+      expect(server_holds?(miss)).to be(true)
+      expect(server_holds?("Technical Support")).to be(true) # the snapshot's phrase is not re-registered
     end
   end
 

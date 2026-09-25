@@ -30,6 +30,7 @@ module Langsys
       attr_accessor messages_category: String?
       attr_accessor migration: Array[String]?
       attr_accessor migration_locale: String?
+      attr_accessor snapshot: String?
       attr_accessor query_param: String
       attr_accessor cookie_name: String
       attr_accessor cookie_max_age: Integer

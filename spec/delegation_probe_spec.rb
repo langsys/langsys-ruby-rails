@@ -21,7 +21,7 @@ module DelegationProbe
     { rules: %w[GATE-1 GATE-8 REG-1 BIND-2], name: "capability decision",
       pattern: /can_write\?|write_enabled|write_signal|key_type/ },
     { rules: %w[GATE-2 GATE-5 REG-6 REG-7 REG-8], name: "queue bookkeeping",
-      pattern: /clear_pending|registered\?|begin_send|end_send|penalise|snapshot|backing_off\?|reset_backoff!/ },
+      pattern: /clear_pending|registered\?|begin_send|end_send|penalise|\.snapshot\(|backing_off\?|reset_backoff!/ },
     { rules: %w[GATE-4 CACHE-1], name: "cache writes and keys",
       pattern: /@cache\.(?:set|write|delete|clear)|\bcache_key\b/ },
     { rules: %w[CAT-1 CAT-2 CAT-3 REG-12 REG-13], name: "catalog inspection",
@@ -42,7 +42,8 @@ module DelegationProbe
     { rules: %w[CACHE-2], name: "failed-fetch memory", pattern: /failing\?|record_failure/ },
     { rules: %w[MIG-3 MIG-4 MIG-5 MIG-6 MIG-7 MIG-9], name: "legacy conversion and import",
       pattern: /convert_literal|Migration\.convert|Migration\.new|rails_plural|gettext_plural|PoFile/ },
-    { rules: %w[SNAP-1 SNAP-2 SNAP-3], name: "snapshots", pattern: /Snapshot/ }
+    { rules: %w[SNAP-1 SNAP-3], name: "snapshot export and integrity",
+      pattern: /Snapshot\.(?:export|parse|canonical)|checksum/ }
   ].freeze
 
   module_function
