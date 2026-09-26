@@ -34,6 +34,33 @@ RSpec.describe "Rails integration" do
     expect(last_response.body).to eq("Save")
   end
 
+  describe "SRV-6 — the locale the app resolved" do
+    def vary = last_response.headers["Vary"]
+
+    it "serves the app's locale whatever the URL, cookie and header say, and adds no Vary or cookie" do
+      set_cookie "langsys_locale=de-de"
+      get "/app_locale?app_locale=es-ES&locale=de-DE", {}, { "HTTP_ACCEPT_LANGUAGE" => "de-DE" }
+      expect(last_response.body).to eq("Guardar")
+      expect(vary.to_s).not_to match(/cookie|accept-language/i)
+      expect(last_response.headers["Set-Cookie"]).to be_nil
+    end
+
+    it "maps a bare language to the project's default locale for it" do
+      get "/app_locale?app_locale=es"
+      expect(last_response.body).to eq("Guardar")
+    end
+
+    it "serves the base locale for an app locale the project does not serve" do
+      get "/app_locale?app_locale=fr"
+      expect(last_response.body).to eq("Save")
+    end
+
+    it "resolves the locale itself when the app set none" do
+      get "/app_locale?locale=es-ES"
+      expect(last_response.body).to eq("Guardar")
+    end
+  end
+
   describe "SRV-6 — one URL, four requests" do
     def vary = last_response.headers["Vary"]
     def cookie_written = last_response.headers["Set-Cookie"]

@@ -39,7 +39,7 @@ module Mutation
   VARY = "        add_langsys_vary(resolved[:vary])\n"
   URL_ONLY = "        return unless resolved[:source] == :url\n"
   MARK = "        locale ? { \"data-ls-resolved\" => locale } : {}\n"
-  EMIT = "          client.emit_message(code: code, template: template, params: params, field: field_path(error.attribute))\n"
+  EMIT = "          client.emit_message(code: code, template: template, params: params, field: error.attribute.to_s)\n"
   LS_LOOKUP = "        Langsys::Rails.client.get_translations" \
               ".dig(category || \"__uncategorized__\", phrase) || phrase\n"
 
@@ -112,9 +112,9 @@ module Mutation
       replace: LS_LOOKUP,
       examples: examples(BINDING_SPEC, "the ls helper in a rendered view queues a miss") },
     { id: "process-global-locale", rule: "SRV-2", file: LOCALE,
-      find: "    class CurrentLocale < ActiveSupport::CurrentAttributes\n      attribute :locale\n    end\n",
-      replace: "    class CurrentLocale\n      class << self\n        attr_accessor :locale\n\n        " \
-               "def reset = @locale = nil\n      end\n    end\n",
+      find: "    class CurrentLocale < ActiveSupport::CurrentAttributes\n      attribute :locale, :framework_resolved\n    end\n",
+      replace: "    class CurrentLocale\n      class << self\n        attr_accessor :locale, :framework_resolved\n\n        " \
+               "def reset = @locale = @framework_resolved = nil\n      end\n    end\n",
       examples: examples(BINDING_SPEC, "serves each of two renders suspended mid-flight") },
     { id: "stale-client-after-redirect", rule: "WIRE-5", file: MODULE, find: RECONFIGURE,
       replace: "        config\n",
@@ -133,34 +133,10 @@ module Mutation
       examples: examples(BINDING_SPEC, "leaves a base-locale render unmarked") },
 
     # -- server messages ------------------------------------------------------------------------
-    { id: "entries-from-rendered-text", rule: "MSG-9", file: MESSAGES,
-      find: "          code, template, params = wording(error)\n",
-      replace: "          code, template, params = [\"invalid\", error.full_message, nil]\n",
-      examples: examples(MESSAGES_SPEC, "yields one entry per failed rule", "never takes a template") },
-    { id: "exclusive-bound-worded-as-max", rule: "MSG-2", file: MESSAGES,
-      find: "number: [\"too_large\", \"The :attribute must be less than {value}.\", :value],",
-      replace: "number: [\"too_large\", \"The :attribute must not be greater than {value}.\", :value],",
-      examples: examples(MESSAGES_SPEC, "uses MSG-2's wording for an exclusive upper bound") },
-    { id: "size-code-ignores-type", rule: "MSG-2", file: MESSAGES,
-      find: "        kind = list?(value_of(error)) ? :list : :string\n", replace: "        kind = :string\n",
-      examples: examples(MESSAGES_SPEC, "picks the size code by type") },
-    { id: "label-guessed-from-key", rule: "MSG-10", file: MESSAGES,
-      find: "klass.respond_to?(:human_attribute_name) ? klass.human_attribute_name(error.attribute) : error.attribute.to_s",
-      replace: "error.attribute.to_s.humanize",
-      examples: examples(MESSAGES_SPEC, "writes human_attribute_name into the sentence") },
-    { id: "params-kept-as-strings", rule: "MSG-4", file: MESSAGES, find: "      def number(value)\n",
-      replace: "      def number(value)\n        return value.to_s\n",
-      examples: examples(MESSAGES_SPEC, "carries only the fixed keys, numbers as numbers") },
-    { id: "unlabelled-field-not-reported", rule: "MSG-7", file: SOURCE,
-      find: "        unless label_declared?(klass, attribute)\n", replace: "        if false\n",
-      examples: examples(MESSAGES_SPEC, "names a validated field with no declared label") },
-    { id: "custom-rule-not-reported", rule: "MSG-7", file: SOURCE,
-      find: "        custom.concat(custom_callbacks(klass))\n", replace: "",
-      examples: examples(MESSAGES_SPEC, "exits non-zero naming a custom rule") },
     { id: "declared-template-unchecked", rule: "MSG-11", file: SOURCE,
       find: "            Array(templates).each { |template| catalog.add(template, source: klass.name, field: field.to_s) }\n",
       replace: "            Array(templates).each { |template| catalog.templates << template }\n",
-      examples: examples(MESSAGES_SPEC, "refuses a declared template carrying a label marker") },
+      examples: examples(MESSAGES_SPEC, "refuses a declared template still holding Rails' label placeholder") },
     { id: "message-used-as-lookup-key", rule: "MSG-5", file: HELPER,
       find: "        Langsys::Rails.client.render_message(entry)\n",
       replace: "        Langsys::Rails.t(entry[\"message\"], \"Errors\")\n",

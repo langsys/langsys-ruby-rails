@@ -239,7 +239,7 @@ RSpec.describe "Rails binding, live", :integration do
     it "registers a template the catalog lacks under Errors, once the response is sent" do
       configure_live(key: write_key)
       label = "email #{SecureRandom.hex(4)}"
-      template = "The #{label} is required."
+      template = "#{label} can't be blank"
       with_label(label) do
         env = Rack::MockRequest.env_for("/signups", method: "POST", params: { email: "" })
         status, _, body = LangsysTestApp.call(env)
@@ -254,7 +254,7 @@ RSpec.describe "Rails binding, live", :integration do
 
     it "registers nothing from a read-only key, while the same failure on a write key does" do
       label = "email #{SecureRandom.hex(4)}"
-      template = "The #{label} is required."
+      template = "#{label} can't be blank"
       with_label(label) do
         configure_live(key: read_key)
         post "/signups", email: ""
@@ -283,7 +283,7 @@ RSpec.describe "Rails binding, live", :integration do
       first_status, first = run.call
       expect(first_status).to eq(0)
       expect(first).to be_positive
-      expect(server_holds?("The #{label} is required.", "Errors")).to be(true)
+      expect(server_holds?("#{label} can't be blank", "Errors")).to be(true)
       configure_live(key: write_key) # a fresh client, with nothing cached from the first run
       expect(run.call).to eq([0, 0])
     ensure

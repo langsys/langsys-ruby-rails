@@ -8,9 +8,10 @@ module Langsys
   module Rails
     # Controller concern (auto-included into +ActionController::Base+ by the Railtie).
     #
-    # Before each action it asks the base SDK for the request locale (SRV-6): the URL parameter,
-    # then the locale cookie, then +Accept-Language+, each validated against the project's
-    # locales, falling back to the base locale. After the action it names what that choice
+    # The locale the app sets on I18n is the request's locale (see CurrentAttributesLocaleSource).
+    # For an app that sets none, before each action it asks the base SDK for one (SRV-6): the URL
+    # parameter, then the locale cookie, then +Accept-Language+, each validated against the
+    # project's locales, falling back to the base locale. After the action it names what that choice
     # depended on in +Vary+, and remembers an explicit URL choice in the cookie. A locale that did
     # not come from the URL is never written back, so an unsupported cookie is never re-set.
     #
@@ -40,9 +41,11 @@ module Langsys
         Langsys::Rails::CurrentLocale.locale = locale unless locale.to_s.empty?
       end
 
+      # A locale the app resolved is the app's to vary on and to remember (SRV-6); the binding adds
+      # nothing to it.
       def persist_langsys_locale
         resolved = @_langsys_locale
-        return if resolved.nil?
+        return if resolved.nil? || Langsys::Rails::CurrentLocale.framework_resolved
 
         add_langsys_vary(resolved[:vary])
         return unless resolved[:source] == :url

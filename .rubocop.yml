@@ -30,10 +30,11 @@ Layout/LineLength:
   Exclude:
     - "spec/mutation/manifest.rb"
 
-# The I18n bridge spec passes Rails' own %{name} placeholders, which is what it tests.
+# These specs pass Rails' own %{name} placeholders, which is what they test.
 Style/FormatStringToken:
   Exclude:
     - "spec/i18n_bridge_spec.rb"
+    - "spec/messages_spec.rb"
 
 # The gem entry point is intentionally dash-named (matches the gem name for auto-require).
 Naming/FileName:

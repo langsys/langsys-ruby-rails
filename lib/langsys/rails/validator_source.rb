@@ -2,55 +2,38 @@
 
 module Langsys
   module Rails
-    # MSG-7's source for an ActiveModel app: every template its validators can emit, with each
-    # field's label written in, for the base SDK's Langsys::Messages::Command to list and register.
+    # MSG-7's source for an ActiveModel app: every template its validators can emit — Rails' own
+    # sentence for each failure, built exactly as a failure at runtime builds it, with the field's
+    # label written in — for the base SDK's Langsys::Messages::Command to list and register.
     #
-    # It reports, so the command exits non-zero, every message it cannot list ahead of time:
-    #
-    # * a validated field with no declared label (MSG-10) — a humanised key is a guess, and a
-    #   raw key in a sentence is how +cc_number+ reaches a user;
-    # * a custom validator class, or a +validate+ method or block, whose templates the model has
-    #   not declared. A model declares them by defining +langsys_message_templates+, returning
-    #   +{ field => [template, …] }+ (+:base+ for a whole-record failure).
+    # It reports what it cannot list ahead of time, each with what would make it listable: a
+    # custom validator class, a +validate+ method or block, or a message or bound built by a proc
+    # at runtime. Those register when first emitted (MSG-8), so they fail the command only under
+    # its strict flag. A validated field with no declared label is advice and never fails (MSG-10):
+    # Rails prints a name it derives from the key, which is sometimes one the app would rather not
+    # show. A model lists its custom rules' templates by defining +langsys_message_templates+,
+    # returning +{ field => [template, …] }+.
     class ValidatorSource
+      SIZE = { minimum: :too_short, maximum: :too_long, is: :wrong_length }.freeze
+      BOUNDS = %i[greater_than greater_than_or_equal_to less_than less_than_or_equal_to equal_to other_than].freeze
+
+      # validator class name => ->(options) { [[error type, error options], …] }
       KNOWN = {
-        "ActiveModel::Validations::PresenceValidator" => ->(_) { [:blank] },
-        "ActiveRecord::Validations::PresenceValidator" => ->(_) { [:blank] },
-        "ActiveModel::Validations::AbsenceValidator" => ->(_) { [:present] },
-        "ActiveRecord::Validations::AbsenceValidator" => ->(_) { [:present] },
-        "ActiveModel::Validations::AcceptanceValidator" => ->(_) { [:accepted] },
-        "ActiveModel::Validations::ConfirmationValidator" => ->(_) { [:confirmation] },
-        "ActiveModel::Validations::InclusionValidator" => ->(_) { [:inclusion] },
-        "ActiveModel::Validations::ExclusionValidator" => ->(_) { [:exclusion] },
-        "ActiveModel::Validations::FormatValidator" => ->(_) { [:invalid] },
-        "ActiveRecord::Validations::UniquenessValidator" => ->(_) { [:taken] },
-        "ActiveRecord::Validations::AssociatedValidator" => ->(_) { [:invalid] },
-        "ActiveModel::Validations::LengthValidator" => lambda { |options|
-          { minimum: :too_short, maximum: :too_long, is: :wrong_length }.filter_map do |k, type|
-            type if options.key?(k)
-          end
-        },
-        "ActiveRecord::Validations::LengthValidator" => lambda { |options|
-          { minimum: :too_short, maximum: :too_long, is: :wrong_length }.filter_map do |k, type|
-            type if options.key?(k)
-          end
-        },
-        "ActiveModel::Validations::NumericalityValidator" => lambda { |options|
-          types = [:not_a_number]
-          types << :not_an_integer if options[:only_integer]
-          types + (%i[greater_than greater_than_or_equal_to less_than less_than_or_equal_to equal_to other_than odd
-                      even in] &
-                   options.keys)
-        },
-        "ActiveRecord::Validations::NumericalityValidator" => lambda { |options|
-          types = [:not_a_number]
-          types << :not_an_integer if options[:only_integer]
-          types + (%i[greater_than greater_than_or_equal_to less_than less_than_or_equal_to equal_to other_than odd
-                      even in] &
-                   options.keys)
-        },
-        "ActiveModel::Validations::ComparisonValidator" => lambda { |options|
-          %i[greater_than greater_than_or_equal_to less_than less_than_or_equal_to equal_to other_than] & options.keys
+        "PresenceValidator" => ->(_) { [[:blank, {}]] },
+        "AbsenceValidator" => ->(_) { [[:present, {}]] },
+        "AcceptanceValidator" => ->(_) { [[:accepted, {}]] },
+        "ConfirmationValidator" => ->(_) { [[:confirmation, {}]] },
+        "InclusionValidator" => ->(_) { [[:inclusion, {}]] },
+        "ExclusionValidator" => ->(_) { [[:exclusion, {}]] },
+        "FormatValidator" => ->(_) { [[:invalid, {}]] },
+        "UniquenessValidator" => ->(_) { [[:taken, {}]] },
+        "AssociatedValidator" => ->(_) { [[:invalid, {}]] },
+        "LengthValidator" => ->(o) { SIZE.filter_map { |key, type| [type, { count: o[key] }] if o.key?(key) } },
+        "ComparisonValidator" => ->(o) { (BOUNDS & o.keys).map { |key| [key, { count: o[key] }] } },
+        "NumericalityValidator" => lambda { |o|
+          [[:not_a_number, {}]] + (o[:only_integer] ? [[:not_an_integer, {}]] : []) +
+            ((BOUNDS + %i[in]) & o.keys).map { |key| [key, { count: o[key] }] } +
+            (%i[odd even] & o.keys).map { |key| [key, {}] }
         }
       }.freeze
 
@@ -80,37 +63,42 @@ module Langsys
       end
 
       def collect_class(klass, catalog)
-        validated = Hash.new { |h, k| h[k] = [] }
-        custom = []
+        record = klass.new
+        custom = custom_callbacks(klass)
         klass.validators.each do |validator|
-          known = KNOWN[validator.class.name]
-          if known.nil?
+          failures = KNOWN[validator.class.name.demodulize]
+          if failures.nil?
             custom << "#{validator.class.name} on #{validator.attributes.join(', ')}"
             next
           end
-          validator.attributes.each { |attribute| validated[attribute.to_sym].concat(known.call(validator.options)) }
+          validator.attributes.each do |attribute|
+            collect_failures(klass, record, attribute, validator.options, failures.call(validator.options), catalog)
+          end
         end
-        custom.concat(custom_callbacks(klass))
-
-        validated.each { |attribute, types| collect_attribute(klass, attribute, types.uniq, catalog) }
         collect_declared(klass, custom, catalog)
       end
 
-      def collect_attribute(klass, attribute, types, catalog)
-        unless label_declared?(klass, attribute)
-          problem(catalog, klass, attribute, "no label is declared for this validated field",
-                  "add #{label_key(klass, attribute)} to your locale file, the label human_attribute_name reads")
-          return
-        end
-
-        label = klass.human_attribute_name(attribute)
-        types.each do |type|
-          field = type == :confirmation ? "#{attribute}_confirmation" : attribute.to_s
-          Langsys::Rails::Messages.templates_for(type, label, kind(klass, attribute)).each do |template|
-            catalog.add(template, source: klass.name, field: field)
+      def collect_failures(klass, record, attribute, options, failures, catalog)
+        advise_label(klass, attribute, catalog)
+        failures.each do |type, error_options|
+          field, error_options = confirmation(klass, attribute, error_options) if type == :confirmation
+          if options[:message].respond_to?(:call) || runtime_bound?(error_options[:count])
+            problem(catalog, klass, attribute, "the #{type} message is built at runtime",
+                    "give the validator a literal message and bound, or declare it in langsys_message_templates")
+            next
           end
+          error = ActiveModel::Error.new(record, (field || attribute).to_sym, type,
+                                         **error_options, **options.slice(:message))
+          catalog.add(Langsys::Rails::Messages.unfilled(error)[1], source: klass.name, field: (field || attribute).to_s)
         end
       end
+
+      def confirmation(klass, attribute, error_options)
+        [:"#{attribute}_confirmation", error_options.merge(attribute: klass.human_attribute_name(attribute))]
+      end
+
+      # A proc, or a method name, is a bound only known when the record is validated.
+      def runtime_bound?(value) = value.respond_to?(:call) || value.is_a?(Symbol)
 
       def collect_declared(klass, custom, catalog)
         if klass.respond_to?(:langsys_message_templates)
@@ -119,7 +107,7 @@ module Langsys
           end
         else
           custom.each do |rule|
-            problem(catalog, klass, nil, "custom rule #{rule} has no declared templates",
+            problem(catalog, klass, nil, "custom rule #{rule} has no listed templates",
                     "define #{klass.name}.langsys_message_templates returning { field => [template, ...] }")
           end
         end
@@ -137,27 +125,15 @@ module Langsys
         end
       end
 
-      # What a length or bound rule measures, as far as the declaration says. An attribute whose
-      # type does not settle it (untyped, JSON) is :either, and both wordings are listed; the one
-      # emitted at runtime is chosen from the value.
-      def kind(klass, attribute)
-        return :list if klass.respond_to?(:reflect_on_association) && klass.reflect_on_association(attribute)
-        return :either unless klass.respond_to?(:type_for_attribute)
+      def advise_label(klass, attribute, catalog)
+        return if label_declared?(klass, attribute)
 
-        type = klass.type_for_attribute(attribute.to_s)
-        return :list if type.respond_to?(:subtype) || type.class.name.to_s.end_with?("::Array")
-
-        case type.type
-        when :date, :datetime, :time then :date
-        when :string, :text then :string
-        when :integer, :float, :decimal then :number
-        else :either
-        end
+        catalog.problem(source: klass.name, field: attribute.to_s, advice: true,
+                        issue: "no label is declared, so Rails prints #{klass.human_attribute_name(attribute).inspect}",
+                        fix: "add #{label_key(klass, attribute)} to your locale file if that is not the name to show")
       end
 
       def label_declared?(klass, attribute)
-        return false unless klass.respond_to?(:human_attribute_name) && klass.respond_to?(:lookup_ancestors)
-
         keys = klass.lookup_ancestors.map do |ancestor|
           :"#{klass.i18n_scope}.attributes.#{ancestor.model_name.i18n_key}.#{attribute}"
         end
@@ -165,8 +141,6 @@ module Langsys
       end
 
       def label_key(klass, attribute)
-        return "a human_attribute_name label for #{attribute}" unless klass.respond_to?(:model_name)
-
         "#{I18n.default_locale}.#{klass.i18n_scope}.attributes.#{klass.model_name.i18n_key}.#{attribute}"
       end
 

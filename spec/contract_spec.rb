@@ -16,15 +16,16 @@ RSpec.describe "Against the contract double", :contract do
   end
 
   describe "MSG-5 — a failed form renders its entries in the request locale" do
-    let(:plural) { "El correo debe tener al menos {min, plural, one {# carácter} other {# caracteres}}." }
+    let(:plural) { "El correo debe tener al menos {count, plural, one {# carácter} other {# caracteres}}." }
 
     before do
       contract.seed(
         "projects" => [{ "id" => "proj-c", "base_locale" => "en-us", "target_locales" => ["es-es"],
                          "phrases" => [
-                           { "category" => "Errors", "phrase" => "The email address is required.",
+                           { "category" => "Errors", "phrase" => "email address can't be blank",
                              "translations" => { "es-es" => "El correo electrónico es obligatorio." } },
-                           { "category" => "Errors", "phrase" => "The email address must be at least {min} characters.",
+                           { "category" => "Errors",
+                             "phrase" => "email address is too short (minimum is {count} characters)",
                              "translations" => { "es-es" => plural } }
                          ] }],
         "keys" => [{ "key" => "w", "project" => "proj-c", "type" => "write" }]
@@ -47,7 +48,7 @@ RSpec.describe "Against the contract double", :contract do
 
     it "falls back to the entry's message where the catalog has no translation" do
       post "/signups?locale=es-ES", email: "abcde"
-      expect(last_response.body).to eq("The email address format is invalid.")
+      expect(last_response.body).to eq("email address is invalid")
     end
   end
 end

@@ -64,21 +64,26 @@ Langsys::Rails.t("You have {n, plural, one {# item} other {# items}}.", "Cart", 
 
 ## How the locale is resolved
 
-Before each action the concern asks the base SDK for the request locale, taking the first usable
-candidate from, in order: the `locale` URL parameter (a query parameter, or a route segment named
-`locale`), the `langsys_locale` cookie, then `Accept-Language`, and otherwise the project's base
-locale. Every candidate is validated against the locales your project serves — its base and
-target locales in Langsys — so an unsupported value is skipped, never served and never stored.
+**If your app sets `I18n.locale`, that is the locale Langsys serves** — however you set it: an
+`around_action` with `I18n.with_locale`, a route scope, your own middleware. It is mapped to your
+project's locales (`es-ES` and `es_ES` are `es-es`; a bare `es` is your project's default Spanish
+locale) and validated: a locale your project does not serve is served in your base locale. Langsys
+adds nothing to the response for it — the locale is yours to vary on and to remember.
+
+**If your app sets none**, the concern resolves one itself, taking the first usable candidate from,
+in order: the `locale` URL parameter (a query parameter, or a route segment named `locale`), the
+`langsys_locale` cookie, then `Accept-Language`, and otherwise the project's base locale. Every
+candidate is validated against the locales your project serves, so an unsupported value is
+skipped, never served and never stored.
 
 - A choice taken from the URL is remembered in the cookie, so it sticks across requests. A locale
   that came from the cookie or the header is never written back.
 - The response names what the choice depended on: `Vary: Cookie` when the cookie decided it,
-  `Vary: Accept-Language` when the header did, and nothing extra when the URL did (the URL is
-  already the cache key). A `Vary` your app sets is kept. This is what lets a CDN cache localized
-  pages without serving one visitor's language to the next.
+  `Vary: Accept-Language` when the header did, and nothing extra when the URL did. A `Vary` your
+  app sets is kept.
 
-The locale lives in `ActiveSupport::CurrentAttributes` for the duration of the request — which
-Rails resets automatically — so a single shared client is safe across concurrent requests.
+The binding's own choice lives in `ActiveSupport::CurrentAttributes` for the duration of the
+request, so a single shared client is safe across concurrent requests.
 
 A simple locale switcher is just a set of links:
 
@@ -124,28 +129,30 @@ failed validations into translatable entries, and `ls_message` renders one in th
 <% end %>
 ```
 
-Each entry is `{ "field", "code", "message", "template", "params" }`. `code` is a stable slug to
-branch on (`required`, `too_short`, `invalid_format`, …) — never use it to choose text. `template`
-is a whole sentence with the field's label written in, taken from `human_attribute_name` (so
-declare your labels in `config/locales/*.yml`); only numbers and dates travel in `params`.
-`message` is the filled template, which `ls_message` shows when there is no translation yet. An
-API can return the entries in its own error body, or in the default shape from
-`Langsys::Messages.envelope(entries)`.
+Each entry's `template` is Rails' own sentence for the failure, exactly as Rails words it, with the
+field's label written in where Rails writes it and each value left as a marker: `email address is
+too short (minimum is {count} characters)`, with `params` `{ "count" => 5 }`. `message` is the
+filled sentence — the same text as `errors.full_messages` — which `ls_message` shows until a
+translation exists. `code` is Rails' own error key (`blank`, `too_short`) and `field` Rails'
+attribute, unchanged. Your error response stays yours; to send the entries beside it, add them
+under a key of your choosing (`Langsys::Messages.attach(body, entries)` does that).
 
 A template Langsys has not seen is registered after the response, like any discovered phrase. To
-register every template ahead of time — and fail CI on any message that cannot be — run:
+register them ahead of time, so even the first user sees an error translated, run:
 
 ```bash
-bin/rails langsys:messages               # lists every template; exits non-zero naming each problem
+bin/rails langsys:messages               # lists every template, and reports what it cannot list
 REGISTER=1 bin/rails langsys:messages    # also registers the ones Langsys has not seen
+STRICT=1 bin/rails langsys:messages      # exits non-zero if anything could not be listed
 ```
 
-It reports a validated field with no declared label, and a custom validator or `validate`
-method whose templates you have not declared. Declare those on the model:
+It reports a custom validator, a `validate` method, or a message built at runtime, and advises
+on validated fields whose label Rails derives from the key. List a custom rule's messages on the
+model:
 
 ```ruby
 def self.langsys_message_templates
-  { starts_on: ["The start date cannot be a holiday."] }
+  { starts_on: ["start date cannot be a holiday"] }
 end
 ```
 

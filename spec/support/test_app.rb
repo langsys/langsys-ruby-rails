@@ -123,6 +123,21 @@ class SignupsController < ActionController::Base
   end
 end
 
+# An app that resolves the locale itself, the Rails-guide way (SRV-6).
+class AppLocaleController < ActionController::Base
+  around_action :switch_locale
+
+  def show
+    render plain: ls("Save", "UI")
+  end
+
+  private
+
+  def switch_locale(&block)
+    I18n.with_locale(params[:app_locale], &block)
+  end
+end
+
 class PlanController < ActionController::Base
   def show
     RenderPlan.signal_at_entry = Langsys::Rails.client.write_signal
@@ -175,6 +190,7 @@ LangsysTestApp.routes.draw do
   get "/events" => "events#show"
   get "/vary" => "vary#show"
   get "/layout" => "layout#show"
+  get "/app_locale" => "app_locale#show"
   post "/signups" => "signups#create"
   get "/health", to: ->(_env) { [200, { "content-type" => "text/plain" }, ["ok"]] }
 end
@@ -184,6 +200,15 @@ RSpec.configure do |config|
   # — a write key, base en-us, targets es-es and de-de — which an example overrides by
   # stubbing authorize again (WebMock prefers the latest stub).
   config.before { stub_authorize }
+
+  config.around do |example|
+    enforced = I18n.enforce_available_locales
+    I18n.enforce_available_locales = false
+    example.run
+  ensure
+    I18n.config.locale = nil # no example inherits the locale another example set
+    I18n.enforce_available_locales = enforced
+  end
 
   config.after do
     RenderPlan.reset!

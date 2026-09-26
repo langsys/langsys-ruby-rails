@@ -68,7 +68,8 @@ def authorize_body(key_type:, write_enabled:, target_locales: %w[es-es de-de])
     "status" => true,
     "data" => {
       "id" => "proj-1", "title" => "Test", "base_locale" => "en-us",
-      "target_locales" => target_locales, "default_locales" => {}, "key_type" => key_type,
+      "target_locales" => target_locales, "default_locales" => { "es" => "es-es", "de" => "de-de" },
+      "key_type" => key_type,
       "write_enabled" => write_enabled,
       "langsys_settings" => { "translatable_items" => { "batch_limit" => 200 } }
     }

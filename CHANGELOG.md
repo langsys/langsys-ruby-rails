@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The locale an app sets on I18n is the locale Langsys serves; the binding resolves one from the
+  URL, cookie and `Accept-Language` only when the app set none.
+- Validation-error templates are Rails' own sentences, as `errors.full_messages` renders them, with
+  values as markers, and `code` is Rails' own error key; the binding's own wording and codes are
+  gone.
+- `rake langsys:messages` reports what it cannot list and exits zero; `STRICT=1` makes it fail.
+  A field whose label Rails derives is advice, never a failure.
+
 ### Added
 
 - Validation errors as translatable entries: `Langsys::Rails::Messages.entries(record)` builds them
