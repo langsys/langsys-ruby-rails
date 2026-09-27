@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **SDK** | `langsys-ruby-rails` — the Rails binding over the `langsys` Ruby gem |
-| **Spec revision read** | langsys2 a95af2c2…, docs/sdk-spec.mdx blob 5d7e6890b733a50fb6f5f5c30e0056c6ef7bcf45 |
-| **specVersion** | 8.2.18 (113 rules) |
+| **Spec revision read** | langsys2 234eab14…, docs/sdk-spec.mdx blob 7eee2c10398a1032831837c310215f3b9f16d306 |
+| **specVersion** | 8.2.20 (114 rules) |
 | **Profiles** | server, binding — derived: binding over langsys-ruby |
 | **SDK revision** | `feature/838_write_key_gating` |
-| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes run against `9341cc4`, a clean checkout of that commit |
+| **Core consumed** | `langsys-ruby` `feature/838_write_key_gating`, by path (`../langsys-ruby`); suite and both mutation passes run against `69d126f`, a clean checkout of that commit |
 | **Contract double** | `spec/contract-fixture/`, vendored byte-exact from langsys-js-typescript, git tree `542f57f5ffcb9038db1b7411152b7e31b96cb269` (the suite recomputes the tree id) |
-| **Suite** | 122 hermetic examples, among them 4 against the contract double (`rake spec`) · 20 live (`rake integration`) · 33 hermetic and 11 live mutants (`rake mutation`, `rake mutation:live`) |
+| **Suite** | 123 hermetic examples, among them 4 against the contract double (`rake spec`) · 20 live (`rake integration`) · 33 hermetic and 11 live mutants (`rake mutation`, `rake mutation:live`) |
 
 `delegated` rows name the core's row and carry tier `-`: the behaviour's tier lives on that row,
 and the evidence here is an absence probe with a firing control proving this binding does not
@@ -67,7 +67,7 @@ Every item came from executing code.
 | REG-7 | delegated | - | Core row: langsys-ruby REG-7. Absence probe `spec/delegation_probe_spec.rb` › "queue bookkeeping"; firing control on the core. |
 | REG-8 | delegated | - | Core row: langsys-ruby REG-8. Absence probe `spec/delegation_probe_spec.rb` › "queue bookkeeping"; firing control on the core. |
 | REG-9 | delegated | - | Core row: langsys-ruby REG-9. Absence probe `spec/delegation_probe_spec.rb` › "batching"; firing control on the core. |
-| REG-10 | delegated | - | Core row: langsys-ruby REG-10. Absence probe `spec/delegation_probe_spec.rb` › "failure handling"; firing control on the core. |
+| REG-10 | delegated | - | Core row: langsys-ruby REG-10. Absence probe `spec/delegation_probe_spec.rb` › "failure handling"; firing control on the core. The binding surfaces no flush result: `RequestBoundary` calls `flush_pending` after the response and returns nothing of it; a caller reading a skip's reason calls `Langsys::Rails.client.flush_pending` itself. |
 | REG-11 | delegated | - | Core row: langsys-ruby REG-11. Absence probe `spec/delegation_probe_spec.rb` › "ellipsis handling"; firing control on the core. |
 | REG-12 | delegated | - | Core row: langsys-ruby REG-12. Absence probe `spec/delegation_probe_spec.rb` › "catalog inspection"; firing control on the core. |
 | REG-13 | delegated | - | Core row: langsys-ruby REG-13. Absence probe `spec/delegation_probe_spec.rb` › "catalog inspection"; firing control on the core. |
@@ -102,7 +102,7 @@ Every item came from executing code.
 | TOK-6 | delegated | - | Core row: langsys-ruby TOK-6. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. |
 | MARK-1 | delegated | - | Core row: langsys-ruby MARK-1. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. |
 | MARK-2 | delegated | - | Core row: langsys-ruby MARK-2. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. |
-| MARK-3 | delegated | - | Core row: langsys-ruby MARK-3. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. |
+| MARK-3 | delegated | - | Core row: langsys-ruby MARK-3. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. This binding stamps no identity host: `ls` returns text and the layout helper writes only `data-ls-resolved`. |
 | MARK-4 | delegated | - | Core row: langsys-ruby MARK-4. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. |
 | SSR-1 | n/a (profile: browser) | - | Profiles: browser. This binding runs in a server process. |
 | SSR-2 | n/a (profile: browser) | - | Profiles: browser. This binding runs in a server process. |
@@ -113,6 +113,7 @@ Every item came from executing code.
 | SRV-4 | n/a (architecture: Rails views emit terminal HTML and this binding takes part in no hydration hand-off, the spec's per-SDK table row for it; live if the binding ever seeds a client-side Langsys SDK before hydration) | - | No client catalog exists to seed. |
 | SRV-5 | delegated | - | Core row: langsys-ruby SRV-5. Absence probe `spec/delegation_probe_spec.rb` › "tokenizer and host identity"; firing control on the core. `ls` takes a string; subtree walks reached through `Langsys::Rails.client` are the core's. |
 | SRV-6 | implemented | live | The locale the app set on I18n is the request's locale: the locale source reads it at lookup time (apps set it in callbacks that run after the binding's) and the core's `Client#framework_locale` maps and validates it — `es-ES` is `es-es`, a bare `es` the project's default Spanish locale, an unsupported one the base — and the binding adds no `Vary` and writes no cookie for it. Only where the app set none does the controller concern take the locale from the core's `resolve_request_locale` — URL parameter, then the locale cookie, then `Accept-Language`, each validated — naming what that choice depended on in `Vary` and writing the cookie only for a URL choice. Hermetic: `spec/integration_spec.rb` › "serves the app's locale whatever the URL, cookie and header say, and adds no Vary or cookie", › "maps a bare language to the project's default locale for it", › "serves the base locale for an app locale the project does not serve", › "resolves the locale itself when the app set none", and the four nothing-resolved cases. Live, against the fixture project: › "lets the URL win over a conflicting cookie and header, and adds no Vary", › "lets the cookie win over the header, with Vary: Cookie", › "negotiates the header alone, with Vary: Accept-Language", › "falls through a locale the project does not serve, and never writes it back". Mutants `app-locale-ignored`, `view-proxy-not-unwrapped`, `vary-on-app-locale`, `vary-dropped`, `cookie-written-for-any-source`, `live-vary-dropped`. |
+| SRV-7 | implemented | n/a (pure) | This binding renders on a server over the server core, and wires Rails' request to the core's per-request state rather than keeping its own: `RequestBoundary` opens the core's request scope as a request enters and ends it after the response, so each request's misses are its own (SRV-3); each request's locale reaches the core through the locale source, from the locale the app set or the binding resolved in `ActiveSupport::CurrentAttributes`, which Rails resets per request; the core's catalog is shared read-only across requests, keyed by locale. Terminal HTML, so no hydration seed (SRV-4). `spec/binding_conformance_spec.rb` › "renders a second request in another locale with nothing of the first in its bytes" and › "serves each of two renders suspended mid-flight together only its own locale's text"; `spec/request_boundary_spec.rb` › "does not let another request's flush collect a miss while its own render is still running". Mutants `process-global-locale`, `no-request-scope`. Tier: an isolation property no stateful fixture can observe. |
 | MSG-1 | implemented | n/a (pure) | An entry is `template`, `params` when it has markers, and `message`, plus what Rails already reports, unchanged: the attribute as `field` and the error key as `code`. `spec/messages_spec.rb` › "carries numbers as numbers, params only with markers, and message the filled template" and › "keeps Rails' own field path, and words a nested failure as Rails renders it". The binding adds no error body of its own; `Langsys::Messages.attach` is the core's, for an app that wants the entries beside its own. |
 | MSG-2 | implemented | n/a (pure) | `code` is Rails' own error key, passed through; a failure that is only text carries none. › "passes the error key through unchanged" (`blank`, `too_short`, `invalid`, `less_than`, `confirmation`) and › "registers a failure that arrives as text only as that text, with no code and no params". Mutant `code-mapped`. |
 | MSG-3 | implemented | n/a (pure) | The template is Rails' own sentence: ActiveModel's message for the failure with interpolation skipped — its own lookup, defaults chain and plural choice — inside its full message, so the label is written in where Rails writes it; every other interpolation is a `{name}` marker. › "yields one entry per failure, each Rails' sentence with {count} as a marker and the count as a param", › "is Rails' rendered message exactly, once filled", › "keeps the plural form Rails chose for the count", › "turns an app's own interpolation value into a marker". Mutant `values-filled-in`. |
@@ -156,7 +157,7 @@ Every item came from executing code.
 | WIRE-4 | implemented | live | Binding code sits on every request path — locale resolution and the request boundary. Live › "serves the page in the source language when the API refuses the key, and records nothing". Hermetic › "serves the source language and records nothing" (connection refused) and `spec/request_boundary_spec.rb` › "neither builds a client nor raises for a request that never translated". Mutants `raising-lookup-on-request-path`, `live-raising-lookup-on-request-path`, `boundary-builds-a-client`. |
 | WIRE-5 | implemented | live | `api_url` passes to the core and is documented in the README. Live › "takes a redirect made after first use: a dead address degrades, then the live one translates"; reconfiguring rebuilds the client. The contract suite runs entirely through the same seam. Mutants `stale-client-after-redirect`, `live-stale-client-after-redirect`. |
 | CONF-1 | implemented | n/a (pure) | Every row graded `live` asserts on the served bytes or on server state read back through a separate, uncached client; `contract` rows read the double's state. Every-path clause: REG-3 and SRV-3 on both completion paths, GATE-7 on both entry points, MSG-5 through a rendered form. WebMock-backed examples carry no `live` or `contract` grade. |
-| CONF-2 | implemented | n/a (pure) | Every row carries a canonical tier. `spec/conformance_doc_spec.rb` checks the header rows, one status table, all 113 ids once each in spec order, the status and tier vocabulary and the tiers each status permits, and a summary computed from the table. The contract double is vendored byte-exact at tree 542f57f5 and re-derived by the suite. Mutant `summary-drifts-from-table`. |
+| CONF-2 | implemented | n/a (pure) | Every row carries a canonical tier. `spec/conformance_doc_spec.rb` checks the header rows, one status table, all 114 ids once each in spec order, the status and tier vocabulary and the tiers each status permits, and a summary computed from the table. The contract double is vendored byte-exact at tree 542f57f5 and re-derived by the suite. Mutant `summary-drifts-from-table`. |
 | CONF-3 | implemented | n/a (pure) | `spec/mutation/manifest.rb`, run by `rake mutation` (33 hermetic mutants) and `rake mutation:live` (11 live). An entry must apply exactly once; its examples must be green, with none pending, before the edit, and red without a load error after it; the file is then restored byte for byte. Result on this tree: 33/33 hermetic and 11/11 live mutants killed. |
 
 ## Summary
@@ -165,11 +166,11 @@ Computed from the table above; `spec/conformance_doc_spec.rb` fails the build wh
 
 | Status | Count |
 |---|---|
-| implemented | 35 |
+| implemented | 36 |
 | delegated | 53 |
 | n/a (profile: browser) | 21 |
 | n/a (architecture) | 4 |
-| total | 113 |
+| total | 114 |
 
 ## Obligations taken over from `langsys-ruby`
 
@@ -212,10 +213,10 @@ The commands, not the values, are the record:
 
 ```
 # The spec blob and rule ids this file rows against
-git -C ../langsys2 rev-parse a95af2c2:docs/sdk-spec.mdx
-#   -> 5d7e6890b733a50fb6f5f5c30e0056c6ef7bcf45
-git -C ../langsys2 cat-file blob 5d7e6890 | grep -cE '^### [A-Z]+-[0-9]+ '
-#   -> 113
+git -C ../langsys2 rev-parse 234eab14:docs/sdk-spec.mdx
+#   -> 7eee2c10398a1032831837c310215f3b9f16d306
+git -C ../langsys2 cat-file blob 7eee2c10 | grep -cE '^### [A-Z]+-[0-9]+ '
+#   -> 114
 
 # Hermetic suite (includes the contract double), lint, signatures, hermetic mutants
 bundle exec rake spec && bundle exec rubocop && bundle exec rake rbs && bundle exec rake mutation

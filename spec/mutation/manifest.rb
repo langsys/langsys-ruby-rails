@@ -169,7 +169,7 @@ module Mutation
 
     # -- the conformance document --------------------------------------------------------
     { id: "summary-drifts-from-table", rule: "CONF-2", file: "CONFORMANCE.md",
-      find: "| implemented | 35 |", replace: "| implemented | 36 |",
+      find: "| implemented | 36 |", replace: "| implemented | 37 |",
       examples: examples(DOC_SPEC, "has a summary computed from the table") },
 
     # -- live: the same breaks, observed against the real server ---------------------------

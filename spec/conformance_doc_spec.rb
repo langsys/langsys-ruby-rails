@@ -4,16 +4,16 @@ require "spec_helper"
 
 # CONFORMANCE.md is a claim about this binding. This file keeps the claim's FORM honest, so a
 # malformed or self-contradicting document fails the build rather than the reader: the
-# canonical header rows, one status table grading each of the spec's 113 rule ids exactly once,
+# canonical header rows, one status table grading each of the spec's 114 rule ids exactly once,
 # the status and tier vocabulary and which tiers each status may carry, and a summary computed
 # from the table instead of typed beside it.
 module ConformanceDoc
   PATH = File.expand_path("../CONFORMANCE.md", __dir__)
 
-  SPEC_BLOB = "5d7e6890b733a50fb6f5f5c30e0056c6ef7bcf45"
+  SPEC_BLOB = "7eee2c10398a1032831837c310215f3b9f16d306"
 
   # The rule ids of docs/sdk-spec.mdx at SPEC_BLOB, in document order. Derived, not recalled:
-  #   git -C ../langsys2 cat-file blob 5d7e6890 | grep -oE '^### [A-Z]+-[0-9]+ ' | cut -c5- | tr -d ' '
+  #   git -C ../langsys2 cat-file blob 7eee2c10 | grep -oE '^### [A-Z]+-[0-9]+ ' | cut -c5- | tr -d ' '
   # Hard-coded because the spec lives in a sibling repo that need not be present at test time.
   RULE_IDS = %w[
     GATE-1 GATE-2 GATE-3 GATE-4 GATE-5 GATE-6 GATE-7 GATE-8 GATE-9 GATE-10
@@ -22,16 +22,16 @@ module ConformanceDoc
     HINT-5 HINT-6 HINT-7 HINT-8 HINT-9 HINT-10 HINT-11 HINT-12 HINT-13 ICU-1
     ICU-2 ICU-3 ICU-4 ICU-5 ICU-6 CID-1 CID-2 CID-3 CID-4 TOK-1
     TOK-2 TOK-3 TOK-4 TOK-5 TOK-6 MARK-1 MARK-2 MARK-3 MARK-4 SSR-1
-    SSR-2 SSR-3 SRV-1 SRV-2 SRV-3 SRV-4 SRV-5 SRV-6 MSG-1 MSG-2
-    MSG-3 MSG-4 MSG-5 MSG-6 MSG-7 MSG-8 MSG-9 MSG-10 MSG-11 MSG-12
-    MIG-1 MIG-2 MIG-3 MIG-4 MIG-5 MIG-6 MIG-7 MIG-8 MIG-9 SNAP-1
-    SNAP-2 SNAP-3 BIND-1 BIND-2 BIND-3 BIND-4 BIND-5 BIND-6 GRANT-1 GRANT-2
-    GRANT-3 GRANT-4 CACHE-1 CACHE-2 OBS-1 WIRE-1 WIRE-2 WIRE-3 WIRE-4 WIRE-5
-    CONF-1 CONF-2 CONF-3
+    SSR-2 SSR-3 SRV-1 SRV-2 SRV-3 SRV-4 SRV-5 SRV-6 SRV-7 MSG-1
+    MSG-2 MSG-3 MSG-4 MSG-5 MSG-6 MSG-7 MSG-8 MSG-9 MSG-10 MSG-11
+    MSG-12 MIG-1 MIG-2 MIG-3 MIG-4 MIG-5 MIG-6 MIG-7 MIG-8 MIG-9
+    SNAP-1 SNAP-2 SNAP-3 BIND-1 BIND-2 BIND-3 BIND-4 BIND-5 BIND-6 GRANT-1
+    GRANT-2 GRANT-3 GRANT-4 CACHE-1 CACHE-2 OBS-1 WIRE-1 WIRE-2 WIRE-3 WIRE-4
+    WIRE-5 CONF-1 CONF-2 CONF-3
   ].freeze
 
   HEADER_ROWS = [
-    "| **Spec revision read** | langsys2 a95af2c2…, docs/sdk-spec.mdx blob #{SPEC_BLOB} |",
+    "| **Spec revision read** | langsys2 234eab14…, docs/sdk-spec.mdx blob #{SPEC_BLOB} |",
     "| **Profiles** | server, binding — derived: binding over langsys-ruby |"
   ].freeze
 
@@ -90,8 +90,8 @@ RSpec.describe "CONFORMANCE.md" do
   let(:rows) { ConformanceDoc.rows }
 
   it "derives from a spec blob whose rule list is intact" do
-    expect(ConformanceDoc::RULE_IDS.size).to eq(113)
-    expect(ConformanceDoc::RULE_IDS.uniq.size).to eq(113)
+    expect(ConformanceDoc::RULE_IDS.size).to eq(114)
+    expect(ConformanceDoc::RULE_IDS.uniq.size).to eq(114)
   end
 
   it "carries the canonical header rows" do

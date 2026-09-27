@@ -204,6 +204,18 @@ RSpec.describe "Binding conformance" do
     end
   end
 
+  describe "SRV-7 — each request renders in its own scope" do
+    it "renders a second request in another locale with nothing of the first in its bytes" do
+      stub_translations("de-de", { "UI" => { "Save" => "Speichern", "Cancel" => "Abbrechen" } })
+      stub_translations("es-es", { "UI" => { "Save" => "Guardar", "Cancel" => "Cancelar" } })
+      ConcurrentController.rendezvous = Rendezvous.new(parties: 1)
+      get "/concurrent?locale=de-DE"
+      expect(last_response.body).to eq("Speichern|Abbrechen")
+      get "/concurrent?locale=es-ES"
+      expect(last_response.body).to eq("Guardar|Cancelar")
+    end
+  end
+
   describe "OBS-1 — the core's diagnostics reach the Rails log" do
     it "logs the once-per-process unusable-capability warning to Rails.logger when none is configured" do
       io = StringIO.new
